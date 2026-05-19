@@ -30,7 +30,7 @@ def grafico_barras(datos, titulo, sufijo=""):
 
     # colores estilo Copa Airlines
     colores = [
-        "#003B7A", "#C9A227", "#5B8CC0", "#E0C76A",
+        #003B7A", "#C9A227", "#5B8CC0", "#E0C76A",
         "#7FA7D8", "#D8C27A", "#2F5D9A", "#F2E3A3"
     ]
 
@@ -209,8 +209,9 @@ if archivo:
         st.success("✅ Archivo procesado correctamente")
         st.dataframe(df[columnas_visibles].head())
 
-        # Creamos una variable comodín para capturar los datos que mandaremos a tu jefa
+        # Variable para capturar los datos calculados para el reporte final
         df_reporte_jefa = None
+        titulo_seccion_reporte = "Resumen Operativo"
 
         # ==========================================
         # SECCIÓN POBLACIÓN
@@ -262,7 +263,9 @@ if archivo:
 
             tabla_load = load_factor_ruta.reset_index()
             tabla_load.columns = ["Ruta", "Load Factor"]
-            df_reporte_jefa = tabla_load.copy()  # Guardamos copia para el reporte
+            
+            df_reporte_jefa = tabla_load.copy()
+            titulo_seccion_reporte = "Ocupación General (Load Factor)"
 
             tabla_load["Load Factor"] = tabla_load["Load Factor"].astype(str) + "%"
             st.dataframe(tabla_load, use_container_width=True)
@@ -319,7 +322,9 @@ if archivo:
 
                 tabla_puntualidad = puntualidad.reset_index()
                 tabla_puntualidad.columns = ["Ruta", "Puntualidad %"]
-                df_reporte_jefa = tabla_puntualidad.copy()  # Guardamos copia para el reporte
+                
+                df_reporte_jefa = tabla_puntualidad.copy()
+                titulo_seccion_reporte = "Cumplimiento de Puntualidad"
 
                 tabla_puntualidad["Puntualidad %"] = tabla_puntualidad["Puntualidad %"].astype(str) + "%"
                 st.dataframe(tabla_puntualidad)
@@ -327,36 +332,43 @@ if archivo:
                 st.error("❌ No existen columnas HORA LLEGADA o CONECTOR")
 
         # =====================================================================
-        # === ENRUTADOR SEGURO DROPBOX (SISTEMA DE ASIGNACIÓN AUTOMÁTICA) ===
+        # === BOTÓN DE DESCARGA DIRECTA (REEMPLAZA DROPBOX SEGURO EN LA WEB) ===
         # =====================================================================
         if df_reporte_jefa is not None:
-            nombre_archivo = "Reporte_Analisis_Copa_Oeste.html"
-            ruta_dropbox = os.path.join("c:", os.sep, "Users", "Asistente Operativo", "Dropbox", "PYTHON", "Analisis de ruta copa oeste", nombre_archivo)
+            st.markdown("---")
+            st.subheader("📋 Generación de Reporte Ejecutivo")
 
-            try:
-                with open(ruta_dropbox, "w", encoding="utf-8-sig") as f:
-                    f.write("<html><head><title>Análisis de Ruta Copa Oeste</title>")
-                    f.write("<meta charset='utf-8'>")
-                    f.write("<meta name='viewport' content='width=device-width, initial-scale=1'>")
-                    f.write("<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css'></head>")
-                    f.write("<body class='container my-4' style='background-color: #f8f9fa;'>")
-                    
-                    # Diseño ejecutivo optimizado para smartphones
-                    f.write("<div class='p-4 mb-4 bg-white rounded shadow-sm' style='border-left: 5px solid #003B7A;'>")
-                    f.write("<h1 style='color: #003B7A; font-weight: bold;'>📊 Reporte Operativo - Copa Oeste</h1>")
-                    f.write("<p class='text-muted mb-0'>Auditoría de rendimiento, ocupación y puntualidad de rutas</p>")
-                    f.write("</div>")
-                    
-                    # Contenedor responsive para evitar que las tablas se corten
-                    f.write("<div class='p-4 bg-white rounded shadow-sm'>")
-                    f.write("<h3 class='mb-3 text-secondary' style='font-size: 1.25rem;'>Resumen de Indicadores Clave</h3>")
-                    f.write("<div class='table-responsive'>")
-                    f.write(df_reporte_jefa.to_html(classes='table table-striped table-hover table-bordered align-middle', index=False))
-                    f.write("</div></div></body></html>")
-                    
-                st.toast("📝 ¡Reporte en Dropbox actualizado con éxito!", icon="🔄")
-            except Exception as e_dropbox:
-                st.error(f"Error al exportar reporte a Dropbox: {e_dropbox}")
+            # Estructura limpia y responsiva en formato HTML para descarga web
+            html_contenido = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Reporte Análisis Copa Oeste</title>
+                <meta name='viewport' content='width=device-width, initial-scale=1'>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+            </head>
+            <body class="bg-light p-4">
+                <div class="container bg-white p-4 rounded shadow-sm" style="border-left: 5px solid #003B7A; max-width: 800px; margin: 0 auto;">
+                    <h2 class="text-primary mb-1" style="color: #003B7A !important; font-weight: bold;">📊 Reporte Operativo - Copa Oeste</h2>
+                    <p class="text-muted small">Auditoría de rendimiento, ocupación y puntualidad de rutas</p>
+                    <hr>
+                    <h4 class="mb-3 text-secondary" style="font-size: 1.15rem;">{titulo_seccion_reporte}</h4>
+                    <div class="table-responsive">
+                        {df_reporte_jefa.to_html(classes='table table-striped table-hover table-bordered align-middle', index=False)}
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+
+            st.download_button(
+                label="📥 Descargar Reporte HTML",
+                data=html_contenido,
+                file_name="Reporte_Analisis_Copa_Oeste.html",
+                mime="text/html",
+                use_container_width=True
+            )
 
     except Exception as e:
-        st.error(f"❌ Error general: {e}")
+        st.error(f"❌ Error general durante el procesamiento: {e}")
