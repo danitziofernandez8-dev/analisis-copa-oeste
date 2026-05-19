@@ -1,0 +1,362 @@
+import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+
+# ==========================================
+# CONFIGURACIÓN PÁGINA
+# ==========================================
+st.set_page_config(
+    page_title="Copa Oeste - Análisis",
+    layout="wide"
+)
+
+st.title("🚌 Análisis de Rutas - Copa Oeste")
+
+# ==========================================
+# CONFIGURACIÓN GENERAL
+# ==========================================
+CAPACIDAD_BUS = 22
+
+# ==========================================
+# FUNCIÓN GRÁFICOS
+# ==========================================
+def grafico_barras(datos, titulo, sufijo=""):
+
+    # validar datos vacíos
+    if datos.empty:
+        st.warning(f"⚠️ No hay datos para mostrar en: {titulo}")
+        return
+
+    # colores estilo Copa Airlines
+    colores = [
+        "#003B7A", "#C9A227", "#5B8CC0", "#E0C76A",
+        "#7FA7D8", "#D8C27A", "#2F5D9A", "#F2E3A3"
+    ]
+
+    colores_final = (colores * ((len(datos) // len(colores)) + 1))[:len(datos)]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    barras = ax.bar(
+        datos.index.astype(str),
+        datos.values,
+        color=colores_final,
+        edgecolor="white",
+        linewidth=2
+    )
+
+    fig.patch.set_facecolor("#F8F9FA")
+    ax.set_facecolor("#F8F9FA")
+
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+    ax.spines["bottom"].set_color("#D9D9D9")
+
+    ax.grid(False)
+
+    ax.set_title(
+        titulo,
+        fontsize=16,
+        fontweight="bold",
+        color="#003B7A",
+        pad=20
+    )
+
+    ax.set_ylabel("")
+    ax.set_xlabel("")
+    ax.set_yticks([])
+
+    ax.tick_params(axis="x", labelsize=10, colors="#003B7A")
+
+    valor_maximo = max(datos.values) if len(datos.values) > 0 else 1
+    if valor_maximo <= 0:
+        valor_maximo = 1
+
+    # etiquetas
+    for barra in barras:
+        altura = barra.get_height()
+        ax.text(
+            barra.get_x() + barra.get_width() / 2,
+            altura + (valor_maximo * 0.02),
+            f"{int(altura)}{sufijo}",
+            ha="center",
+            fontsize=11,
+            fontweight="bold",
+            color="#003B7A"
+        )
+
+    ax.set_ylim(0, valor_maximo * 1.15)
+    st.pyplot(fig)
+
+
+# ==========================================
+# SUBIR ARCHIVO
+# ==========================================
+archivo = st.file_uploader(
+    "📂 Sube el Excel de Rutas",
+    type=["xlsx"]
+)
+
+if archivo:
+    try:
+        # ==========================================
+        # LEER EXCEL
+        # ==========================================
+        excel_file = pd.ExcelFile(archivo)
+        hoja_real = None
+
+        for hoja in excel_file.sheet_names:
+            if hoja.strip().upper() == "ENTRADA":
+                hoja_real = hoja
+                break
+
+        if hoja_real is None:
+            st.error("❌ No existe la pestaña ENTRADA")
+            st.stop()
+
+        # ==========================================
+        # LEER RAW
+        # ==========================================
+        df_raw = pd.read_excel(
+            archivo,
+            sheet_name=hoja_real,
+            header=None
+        )
+
+        # ==========================================
+        # BUSCAR FILA ENCABEZADO
+        # ==========================================
+        fila_encabezado = None
+        palabras_clave = ["FECHA", "RUTA", "HORA LLEGADA", "H. PARTIDA", "UNIDAD"]
+
+        for idx, row in df_raw.iterrows():
+            valores = [str(v).strip().upper() for v in row.values]
+            if any(pc in valores for pc in palabras_clave):
+                fila_encabezado = idx
+                break
+
+        if fila_encabezado is None:
+            st.error("❌ No se detectó encabezado")
+            st.stop()
+
+        # ==========================================
+        # LIMPIAR COLUMNAS
+        # ==========================================
+        columnas_reales = df_raw.iloc[fila_encabezado].values
+        columnas_limpias = []
+
+        for i, col in enumerate(columnas_reales):
+            col_str = str(col).strip()
+            if (
+                pd.isna(col)
+                or col_str == ""
+                or col_str.lower() in ["nan", "none"]
+                or col_str.startswith("Unnamed")
+            ):
+                columnas_limpias.append(f"VACIO_{i}")
+            else:
+                columnas_limpias.append(col_str)
+
+        # ==========================================
+        # CREAR DATAFRAME
+        # ==========================================
+        df = df_raw.iloc[fila_encabezado + 1:].copy()
+        df.columns = columnas_limpias
+        df = df.dropna(how="all").reset_index(drop=True)
+
+        columnas_visibles = [c for c in df.columns if not str(c).startswith("VACIO_")]
+
+        # ==========================================
+        # FECHA
+        # ==========================================
+        if "FECHA" in df.columns:
+            df["FECHA_PROCESADA"] = pd.to_datetime(df["FECHA"], errors="coerce")
+
+        # ==========================================
+        # SIDEBAR (FILTROS)
+        # ==========================================
+        st.sidebar.header("📅 Filtros")
+
+        if "FECHA_PROCESADA" in df.columns and not df["FECHA_PROCESADA"].dropna().empty:
+            meses_es = {
+                1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+                5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
+                9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+            }
+
+            df["PERIODO"] = (
+                df["FECHA_PROCESADA"].dt.year.astype(str)
+                + " - "
+                + df["FECHA_PROCESADA"].dt.month.map(meses_es)
+            )
+
+            lista_periodos = sorted(df["PERIODO"].dropna().unique())
+            periodo = st.sidebar.selectbox("Selecciona Mes:", ["Todos"] + lista_periodos)
+
+            if periodo != "Todos":
+                df = df[df["PERIODO"] == periodo]
+
+        tipo_analisis = st.sidebar.radio(
+            "📌 Tipo de Análisis",
+            ["👥 Población", "⏱️ Tiempos"]
+        )
+
+        # ==========================================
+        # VISTA PREVIA GENERAL
+        # ==========================================
+        st.success("✅ Archivo procesado correctamente")
+        st.dataframe(df[columnas_visibles].head())
+
+        # Creamos una variable comodín para capturar los datos que mandaremos a tu jefa
+        df_reporte_jefa = None
+
+        # ==========================================
+        # SECCIÓN POBLACIÓN
+        # ==========================================
+        if tipo_analisis == "👥 Población":
+            st.header("👥 Análisis de Población")
+
+            cols_aire = [c for c in columnas_visibles if "AIRE" in c.upper()]
+            cols_tierra = [c for c in columnas_visibles if "TIERRA" in c.upper()]
+
+            df_pasajeros = df.copy()
+
+            for col in cols_aire + cols_tierra:
+                df_pasajeros[col] = pd.to_numeric(df_pasajeros[col], errors="coerce").fillna(0)
+
+            df_pasajeros["Total_Aire"] = df_pasajeros[cols_aire].sum(axis=1)
+            df_pasajeros["Total_Tierra"] = df_pasajeros[cols_tierra].sum(axis=1)
+            df_pasajeros["Total_Pasajeros"] = df_pasajeros["Total_Aire"] + df_pasajeros["Total_Tierra"]
+
+            col_hora = "H. PARTIDA" if "H. PARTIDA" in df_pasajeros.columns else "HORA LLEGADA"
+
+            df_despachos = df_pasajeros.groupby(["FECHA", "RUTA", col_hora]).agg(
+                Total_Aire=("Total_Aire", "sum"),
+                Total_Tierra=("Total_Tierra", "sum"),
+                Total_Pasajeros=("Total_Pasajeros", "sum"),
+                Buses_Despachados=("UNIDAD", "nunique")
+            ).reset_index()
+
+            st.markdown("---")
+            st.header("📈 Promedio Real de Pasajeros")
+
+            promedio_ruta = df_despachos.groupby("RUTA")[["Total_Aire", "Total_Tierra"]].mean()
+            promedio_ruta = promedio_ruta.round(0).astype(int)
+
+            grafico_barras(promedio_ruta["Total_Aire"], "✈️ Promedio Pasajeros Aire")
+            grafico_barras(promedio_ruta["Total_Tierra"], "🌎 Promedio Pasajeros Tierra")
+            st.dataframe(promedio_ruta)
+
+            st.markdown("---")
+            st.header("🚌 Load Factor Real")
+
+            df_despachos["Capacidad_Total"] = df_despachos["Buses_Despachados"] * CAPACIDAD_BUS
+            df_despachos["Load_Factor"] = (df_despachos["Total_Pasajeros"] / df_despachos["Capacidad_Total"]) * 100
+            df_despachos["Load_Factor"] = df_despachos["Load_Factor"].round(0).astype(int)
+
+            load_factor_ruta = df_despachos.groupby("RUTA")["Load_Factor"].mean().round(0).astype(int)
+
+            grafico_barras(load_factor_ruta, "🚌 Promedio General Load Factor", "%")
+
+            tabla_load = load_factor_ruta.reset_index()
+            tabla_load.columns = ["Ruta", "Load Factor"]
+            df_reporte_jefa = tabla_load.copy()  # Guardamos copia para el reporte
+
+            tabla_load["Load Factor"] = tabla_load["Load Factor"].astype(str) + "%"
+            st.dataframe(tabla_load, use_container_width=True)
+
+        # ==========================================
+        # SECCIÓN TIEMPOS
+        # ==========================================
+        if tipo_analisis == "⏱️ Tiempos":
+            st.header("⏱️ Análisis de Tiempos")
+
+            if "HORA LLEGADA" in df.columns and "CONECTOR" in df.columns:
+                df_tiempos = df.copy()
+
+                df_tiempos["HORA LLEGADA"] = df_tiempos["HORA LLEGADA"].astype(str).str.strip()
+                df_tiempos["CONECTOR"] = df_tiempos["CONECTOR"].astype(str).str.strip()
+
+                df_tiempos["Hora_Programada"] = pd.to_datetime(df_tiempos["HORA LLEGADA"], errors="coerce")
+                df_tiempos["Hora_Real"] = pd.to_datetime(df_tiempos["CONECTOR"], errors="coerce")
+
+                df_tiempos = df_tiempos.dropna(subset=["Hora_Programada", "Hora_Real"])
+                df_tiempos["Diferencia_Min"] = (df_tiempos["Hora_Real"] - df_tiempos["Hora_Programada"]).dt.total_seconds() / 60
+                df_tiempos["Llego_Tarde"] = df_tiempos["Diferencia_Min"] > 0
+
+                st.markdown("---")
+                st.header("🚨 Veces que Llegó Tarde")
+
+                veces_tarde = df_tiempos.groupby("RUTA")["Llego_Tarde"].sum().round(0).astype(int)
+                grafico_barras(veces_tarde, "🚨 Cantidad de Veces Tarde")
+
+                tabla_tarde = veces_tarde.reset_index()
+                tabla_tarde.columns = ["Ruta", "Cantidad Veces Tarde"]
+                st.dataframe(tabla_tarde)
+
+                st.markdown("---")
+                st.header("⏱️ Promedio de Minutos Tarde")
+
+                solo_tarde = df_tiempos[df_tiempos["Diferencia_Min"] > 0]
+                promedio_tarde = solo_tarde.groupby("RUTA")["Diferencia_Min"].mean().round(0).astype(int)
+
+                grafico_barras(promedio_tarde, "⏱️ Promedio Minutos Tarde")
+
+                tabla_promedio = promedio_tarde.reset_index()
+                tabla_promedio.columns = ["Ruta", "Promedio Minutos Tarde"]
+                st.dataframe(tabla_promedio)
+
+                st.markdown("---")
+                st.header("🎯 Puntualidad por Ruta")
+
+                puntualidad = df_tiempos.groupby("RUTA")["Llego_Tarde"].mean()
+                puntualidad = 100 - (puntualidad * 100)
+                puntualidad = puntualidad.round(0).astype(int)
+
+                grafico_barras(puntualidad, "🎯 Porcentaje de Puntualidad")
+
+                tabla_puntualidad = puntualidad.reset_index()
+                tabla_puntualidad.columns = ["Ruta", "Puntualidad %"]
+                df_reporte_jefa = tabla_puntualidad.copy()  # Guardamos copia para el reporte
+
+                tabla_puntualidad["Puntualidad %"] = tabla_puntualidad["Puntualidad %"].astype(str) + "%"
+                st.dataframe(tabla_puntualidad)
+            else:
+                st.error("❌ No existen columnas HORA LLEGADA o CONECTOR")
+
+        # =====================================================================
+        # === ENRUTADOR SEGURO DROPBOX (SISTEMA DE ASIGNACIÓN AUTOMÁTICA) ===
+        # =====================================================================
+        if df_reporte_jefa is not None:
+            nombre_archivo = "Reporte_Analisis_Copa_Oeste.html"
+            ruta_dropbox = os.path.join("c:", os.sep, "Users", "Asistente Operativo", "Dropbox", "PYTHON", "Analisis de ruta copa oeste", nombre_archivo)
+
+            try:
+                with open(ruta_dropbox, "w", encoding="utf-8-sig") as f:
+                    f.write("<html><head><title>Análisis de Ruta Copa Oeste</title>")
+                    f.write("<meta charset='utf-8'>")
+                    f.write("<meta name='viewport' content='width=device-width, initial-scale=1'>")
+                    f.write("<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css'></head>")
+                    f.write("<body class='container my-4' style='background-color: #f8f9fa;'>")
+                    
+                    # Diseño ejecutivo optimizado para smartphones
+                    f.write("<div class='p-4 mb-4 bg-white rounded shadow-sm' style='border-left: 5px solid #003B7A;'>")
+                    f.write("<h1 style='color: #003B7A; font-weight: bold;'>📊 Reporte Operativo - Copa Oeste</h1>")
+                    f.write("<p class='text-muted mb-0'>Auditoría de rendimiento, ocupación y puntualidad de rutas</p>")
+                    f.write("</div>")
+                    
+                    # Contenedor responsive para evitar que las tablas se corten
+                    f.write("<div class='p-4 bg-white rounded shadow-sm'>")
+                    f.write("<h3 class='mb-3 text-secondary' style='font-size: 1.25rem;'>Resumen de Indicadores Clave</h3>")
+                    f.write("<div class='table-responsive'>")
+                    f.write(df_reporte_jefa.to_html(classes='table table-striped table-hover table-bordered align-middle', index=False))
+                    f.write("</div></div></body></html>")
+                    
+                st.toast("📝 ¡Reporte en Dropbox actualizado con éxito!", icon="🔄")
+            except Exception as e_dropbox:
+                st.error(f"Error al exportar reporte a Dropbox: {e_dropbox}")
+
+    except Exception as e:
+        st.error(f"❌ Error general: {e}")
