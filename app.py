@@ -122,6 +122,27 @@ if archivo:
     try:
 
         # ==========================================
+        # SIDEBAR
+        # ==========================================
+        st.sidebar.header("⚙️ Configuración")
+
+        tipo_movimiento = st.sidebar.radio(
+            "🚌 Tipo de Movimiento",
+            [
+                "ENTRADA",
+                "SALIDA"
+            ]
+        )
+
+        tipo_analisis = st.sidebar.radio(
+            "📌 Tipo de Análisis",
+            [
+                "👥 Población",
+                "⏱️ Tiempos"
+            ]
+        )
+
+        # ==========================================
         # LEER EXCEL
         # ==========================================
         excel_file = pd.ExcelFile(archivo)
@@ -130,14 +151,17 @@ if archivo:
 
         for hoja in excel_file.sheet_names:
 
-            if hoja.strip().upper() == "ENTRADA":
+            if hoja.strip().upper() == tipo_movimiento:
 
                 hoja_real = hoja
                 break
 
         if hoja_real is None:
 
-            st.error("❌ No existe la pestaña ENTRADA")
+            st.error(
+                f"❌ No existe la pestaña {tipo_movimiento}"
+            )
+
             st.stop()
 
         # ==========================================
@@ -282,31 +306,11 @@ if archivo:
                 ]
 
         # ==========================================
-        # MENÚ PRINCIPAL
-        # ==========================================
-        tipo_analisis = st.sidebar.radio(
-            "📌 Tipo de Análisis",
-            [
-                "👥 Población",
-                "⏱️ Tiempos"
-            ]
-        )
-
-        # ==========================================
         # SUBMENÚ POBLACIÓN
         # ==========================================
         submenu_poblacion = None
-        tipo_movimiento = None
 
         if tipo_analisis == "👥 Población":
-
-            tipo_movimiento = st.sidebar.radio(
-                "🚌 Tipo de Movimiento",
-                [
-                    "ENTRADA",
-                    "SALIDA"
-                ]
-            )
 
             submenu_poblacion = st.sidebar.radio(
                 "👥 Tipo de Población",
@@ -316,46 +320,12 @@ if archivo:
                 ]
             )
 
-            # ==========================================
-            # FILTRAR ENTRADA / SALIDA
-            # ==========================================
-            if "MOVIMIENTO" in df.columns:
-
-                df = df[
-                    df["MOVIMIENTO"]
-                    .astype(str)
-                    .str.upper()
-                    == tipo_movimiento
-                ]
-
-            elif "TIPO" in df.columns:
-
-                df = df[
-                    df["TIPO"]
-                    .astype(str)
-                    .str.upper()
-                    == tipo_movimiento
-                ]
-
-            elif "ENTRADA/SALIDA" in df.columns:
-
-                df = df[
-                    df["ENTRADA/SALIDA"]
-                    .astype(str)
-                    .str.upper()
-                    == tipo_movimiento
-                ]
-
-            else:
-
-                st.warning(
-                    "⚠️ No se encontró columna ENTRADA/SALIDA."
-                )
-
         # ==========================================
         # VISTA PREVIA
         # ==========================================
-        st.success("✅ Archivo procesado correctamente")
+        st.success(
+            f"✅ Archivo procesado correctamente - Hoja {tipo_movimiento}"
+        )
 
         st.dataframe(
             df[columnas_visibles].head()
@@ -560,7 +530,9 @@ if archivo:
         # ==========================================
         if tipo_analisis == "⏱️ Tiempos":
 
-            st.header("⏱️ Análisis de Tiempos")
+            st.header(
+                f"⏱️ Análisis de Tiempos - {tipo_movimiento}"
+            )
 
             if (
                 "HORA LLEGADA" in df.columns
