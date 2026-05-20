@@ -181,7 +181,6 @@ if archivo:
         palabras_clave = [
             "FECHA",
             "RUTA",
-            "HORA LLEGADA",
             "UNIDAD"
         ]
 
@@ -210,6 +209,7 @@ if archivo:
         )
 
         columnas_limpias = []
+        contador_columnas = {}
 
         for i, col in enumerate(columnas_reales):
 
@@ -222,11 +222,29 @@ if archivo:
                 or col_str.startswith("Unnamed")
             ):
 
-                columnas_limpias.append(f"VACIO_{i}")
+                nombre_final = f"VACIO_{i}"
 
             else:
 
-                columnas_limpias.append(col_str)
+                nombre_base = col_str
+
+                # ==========================================
+                # EVITAR DUPLICADOS
+                # ==========================================
+                if nombre_base in contador_columnas:
+
+                    contador_columnas[nombre_base] += 1
+
+                    nombre_final = (
+                        f"{nombre_base}_{contador_columnas[nombre_base]}"
+                    )
+
+                else:
+
+                    contador_columnas[nombre_base] = 1
+                    nombre_final = nombre_base
+
+            columnas_limpias.append(nombre_final)
 
         # ==========================================
         # DATAFRAME
@@ -378,13 +396,30 @@ if archivo:
             )
 
             # ==========================================
-            # HORA
+            # DETECTAR HORA
             # ==========================================
-            col_hora = (
-                "H. PARTIDA"
-                if "H. PARTIDA" in df_pasajeros.columns
-                else "HORA LLEGADA"
-            )
+            posibles_horas = [
+                "H. PARTIDA",
+                "HORA LLEGADA",
+                "HORA SALIDA"
+            ]
+
+            col_hora = None
+
+            for col in posibles_horas:
+
+                if col in df_pasajeros.columns:
+
+                    col_hora = col
+                    break
+
+            if col_hora is None:
+
+                st.error(
+                    "❌ No se encontró columna de hora"
+                )
+
+                st.stop()
 
             # ==========================================
             # CONSOLIDAR
@@ -534,20 +569,54 @@ if archivo:
                 f"⏱️ Análisis de Tiempos - {tipo_movimiento}"
             )
 
+            # ==========================================
+            # DETECTAR COLUMNAS
+            # ==========================================
+            col_programada = None
+
+            posibles_programadas = [
+                "HORA LLEGADA",
+                "HORA SALIDA",
+                "H. PARTIDA"
+            ]
+
+            for col in posibles_programadas:
+
+                if col in df.columns:
+
+                    col_programada = col
+                    break
+
+            col_real = None
+
+            posibles_reales = [
+                "CONECTOR",
+                "H. T1",
+                "H. T2",
+                "H. TC"
+            ]
+
+            for col in posibles_reales:
+
+                if col in df.columns:
+
+                    col_real = col
+                    break
+
             if (
-                "HORA LLEGADA" in df.columns
-                and "CONECTOR" in df.columns
+                col_programada is not None
+                and col_real is not None
             ):
 
                 df_tiempos = df.copy()
 
                 df_tiempos["Hora_Programada"] = pd.to_datetime(
-                    df_tiempos["HORA LLEGADA"],
+                    df_tiempos[col_programada],
                     errors="coerce"
                 )
 
                 df_tiempos["Hora_Real"] = pd.to_datetime(
-                    df_tiempos["CONECTOR"],
+                    df_tiempos[col_real],
                     errors="coerce"
                 )
 
@@ -595,7 +664,7 @@ if archivo:
             else:
 
                 st.error(
-                    "❌ No existen columnas HORA LLEGADA o CONECTOR"
+                    "❌ No existen columnas válidas para análisis de tiempos"
                 )
 
     except Exception as e:
