@@ -26,7 +26,6 @@ def grafico_barras(datos, titulo, sufijo=""):
         st.warning(f"⚠️ No hay datos para mostrar en: {titulo}")
         return
 
-    # Colores estilo Copa Airlines
     colores = [
         "#C9A227",
         "#5B8CC0",
@@ -59,7 +58,7 @@ def grafico_barras(datos, titulo, sufijo=""):
     ax.set_facecolor("#0b132b")
 
     # ==========================================
-    # ESTILO EJECUTIVO
+    # ESTILO
     # ==========================================
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
@@ -297,8 +296,17 @@ if archivo:
         # SUBMENÚ POBLACIÓN
         # ==========================================
         submenu_poblacion = None
+        tipo_movimiento = None
 
         if tipo_analisis == "👥 Población":
+
+            tipo_movimiento = st.sidebar.radio(
+                "🚌 Tipo de Movimiento",
+                [
+                    "ENTRADA",
+                    "SALIDA"
+                ]
+            )
 
             submenu_poblacion = st.sidebar.radio(
                 "👥 Tipo de Población",
@@ -307,6 +315,42 @@ if archivo:
                     "🌎 Tierra"
                 ]
             )
+
+            # ==========================================
+            # FILTRAR ENTRADA / SALIDA
+            # ==========================================
+            if "MOVIMIENTO" in df.columns:
+
+                df = df[
+                    df["MOVIMIENTO"]
+                    .astype(str)
+                    .str.upper()
+                    == tipo_movimiento
+                ]
+
+            elif "TIPO" in df.columns:
+
+                df = df[
+                    df["TIPO"]
+                    .astype(str)
+                    .str.upper()
+                    == tipo_movimiento
+                ]
+
+            elif "ENTRADA/SALIDA" in df.columns:
+
+                df = df[
+                    df["ENTRADA/SALIDA"]
+                    .astype(str)
+                    .str.upper()
+                    == tipo_movimiento
+                ]
+
+            else:
+
+                st.warning(
+                    "⚠️ No se encontró columna ENTRADA/SALIDA."
+                )
 
         # ==========================================
         # VISTA PREVIA
@@ -322,7 +366,9 @@ if archivo:
         # ==========================================
         if tipo_analisis == "👥 Población":
 
-            st.header("👥 Análisis de Población")
+            st.header(
+                f"👥 Análisis de Población - {tipo_movimiento}"
+            )
 
             cols_aire = [
                 c for c in columnas_visibles
@@ -400,15 +446,25 @@ if archivo:
             # ==========================================
             if submenu_poblacion == "✈️ Aire":
 
-                st.header("✈️ Población Aire")
+                st.header(
+                    f"✈️ Población Aire - {tipo_movimiento}"
+                )
 
                 grafico_barras(
                     promedio_ruta["Total_Aire"],
                     "✈️ Promedio Pasajeros Aire"
                 )
 
+                tabla_aire = promedio_ruta[
+                    ["Total_Aire"]
+                ].copy()
+
+                tabla_aire.columns = [
+                    "Promedio Aire"
+                ]
+
                 st.dataframe(
-                    promedio_ruta[["Total_Aire"]],
+                    tabla_aire,
                     use_container_width=True
                 )
 
@@ -417,15 +473,25 @@ if archivo:
             # ==========================================
             elif submenu_poblacion == "🌎 Tierra":
 
-                st.header("🌎 Población Tierra")
+                st.header(
+                    f"🌎 Población Tierra - {tipo_movimiento}"
+                )
 
                 grafico_barras(
                     promedio_ruta["Total_Tierra"],
                     "🌎 Promedio Pasajeros Tierra"
                 )
 
+                tabla_tierra = promedio_ruta[
+                    ["Total_Tierra"]
+                ].copy()
+
+                tabla_tierra.columns = [
+                    "Promedio Tierra"
+                ]
+
                 st.dataframe(
-                    promedio_ruta[["Total_Tierra"]],
+                    tabla_tierra,
                     use_container_width=True
                 )
 
