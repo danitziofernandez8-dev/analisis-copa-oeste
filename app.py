@@ -26,15 +26,16 @@ def grafico_barras(datos, titulo, sufijo=""):
         st.warning(f"⚠️ No hay datos para mostrar en: {titulo}")
         return
 
+    # Colores estilo Copa Airlines
     colores = [
-        "#003B7A",
         "#C9A227",
         "#5B8CC0",
         "#E0C76A",
         "#7FA7D8",
         "#D8C27A",
         "#2F5D9A",
-        "#F2E3A3"
+        "#F2E3A3",
+        "#4F81BD"
     ]
 
     colores_final = (
@@ -51,12 +52,20 @@ def grafico_barras(datos, titulo, sufijo=""):
         linewidth=2
     )
 
-    fig.patch.set_facecolor("#F8F9FA")
-    ax.set_facecolor("#F8F9FA")
+    # ==========================================
+    # FONDO OSCURO
+    # ==========================================
+    fig.patch.set_facecolor("#0b132b")
+    ax.set_facecolor("#0b132b")
 
+    # ==========================================
+    # ESTILO EJECUTIVO
+    # ==========================================
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
     ax.spines["left"].set_visible(False)
+
+    ax.spines["bottom"].set_color("white")
 
     ax.grid(False)
 
@@ -64,7 +73,7 @@ def grafico_barras(datos, titulo, sufijo=""):
         titulo,
         fontsize=16,
         fontweight="bold",
-        color="#003B7A",
+        color="white",
         pad=20
     )
 
@@ -72,8 +81,17 @@ def grafico_barras(datos, titulo, sufijo=""):
     ax.set_xlabel("")
     ax.set_yticks([])
 
+    ax.tick_params(
+        axis="x",
+        labelsize=10,
+        colors="white"
+    )
+
     valor_maximo = max(datos.values)
 
+    # ==========================================
+    # ETIQUETAS
+    # ==========================================
     for barra in barras:
 
         altura = barra.get_height()
@@ -85,7 +103,7 @@ def grafico_barras(datos, titulo, sufijo=""):
             ha="center",
             fontsize=11,
             fontweight="bold",
-            color="#003B7A"
+            color="white"
         )
 
     ax.set_ylim(0, valor_maximo * 1.15)
@@ -364,9 +382,6 @@ if archivo:
                 Buses_Despachados=("UNIDAD", "nunique")
             ).reset_index()
 
-            # ==========================================
-            # PROMEDIOS
-            # ==========================================
             promedio_ruta = df_despachos.groupby(
                 "RUTA"
             )[[
@@ -380,10 +395,8 @@ if archivo:
                 .astype(int)
             )
 
-            st.markdown("---")
-
             # ==========================================
-            # SUBMENÚ AIRE
+            # AIRE
             # ==========================================
             if submenu_poblacion == "✈️ Aire":
 
@@ -394,50 +407,13 @@ if archivo:
                     "✈️ Promedio Pasajeros Aire"
                 )
 
-                tabla_aire = promedio_ruta[
-                    ["Total_Aire"]
-                ].copy()
-
-                tabla_aire.columns = [
-                    "Promedio Aire"
-                ]
-
                 st.dataframe(
-                    tabla_aire,
+                    promedio_ruta[["Total_Aire"]],
                     use_container_width=True
-                )
-
-                # ==========================================
-                # PROMEDIO POR PARADA
-                # ==========================================
-                st.markdown("---")
-
-                st.header(
-                    "🚏 Promedio por Parada - Aire"
-                )
-
-                promedio_aire = df_pasajeros.groupby(
-                    "RUTA"
-                )[cols_aire].mean()
-
-                promedio_aire = (
-                    promedio_aire
-                    .round(0)
-                    .astype(int)
-                )
-
-                st.dataframe(
-                    promedio_aire,
-                    use_container_width=True
-                )
-
-                grafico_barras(
-                    promedio_aire.sum(),
-                    "✈️ Total Promedio Aire por Parada"
                 )
 
             # ==========================================
-            # SUBMENÚ TIERRA
+            # TIERRA
             # ==========================================
             elif submenu_poblacion == "🌎 Tierra":
 
@@ -448,46 +424,9 @@ if archivo:
                     "🌎 Promedio Pasajeros Tierra"
                 )
 
-                tabla_tierra = promedio_ruta[
-                    ["Total_Tierra"]
-                ].copy()
-
-                tabla_tierra.columns = [
-                    "Promedio Tierra"
-                ]
-
                 st.dataframe(
-                    tabla_tierra,
+                    promedio_ruta[["Total_Tierra"]],
                     use_container_width=True
-                )
-
-                # ==========================================
-                # PROMEDIO POR PARADA
-                # ==========================================
-                st.markdown("---")
-
-                st.header(
-                    "🚏 Promedio por Parada - Tierra"
-                )
-
-                promedio_tierra = df_pasajeros.groupby(
-                    "RUTA"
-                )[cols_tierra].mean()
-
-                promedio_tierra = (
-                    promedio_tierra
-                    .round(0)
-                    .astype(int)
-                )
-
-                st.dataframe(
-                    promedio_tierra,
-                    use_container_width=True
-                )
-
-                grafico_barras(
-                    promedio_tierra.sum(),
-                    "🌎 Total Promedio Tierra por Parada"
                 )
 
             # ==========================================
@@ -612,79 +551,6 @@ if archivo:
 
                 st.dataframe(
                     veces_tarde.reset_index(),
-                    use_container_width=True
-                )
-
-                # ==========================================
-                # PROMEDIO TARDANZA
-                # ==========================================
-                st.markdown("---")
-
-                solo_tarde = df_tiempos[
-                    df_tiempos["Diferencia_Min"] > 0
-                ]
-
-                promedio_tarde = solo_tarde.groupby(
-                    "RUTA"
-                )["Diferencia_Min"].mean()
-
-                promedio_tarde = (
-                    promedio_tarde
-                    .round(0)
-                    .astype(int)
-                )
-
-                grafico_barras(
-                    promedio_tarde,
-                    "⏱️ Promedio Minutos Tarde"
-                )
-
-                st.dataframe(
-                    promedio_tarde.reset_index(),
-                    use_container_width=True
-                )
-
-                # ==========================================
-                # PUNTUALIDAD
-                # ==========================================
-                st.markdown("---")
-
-                puntualidad = df_tiempos.groupby(
-                    "RUTA"
-                )["Llego_Tarde"].mean()
-
-                puntualidad = (
-                    100 - (puntualidad * 100)
-                )
-
-                puntualidad = (
-                    puntualidad
-                    .round(0)
-                    .astype(int)
-                )
-
-                grafico_barras(
-                    puntualidad,
-                    "🎯 Porcentaje de Puntualidad",
-                    "%"
-                )
-
-                tabla_puntualidad = (
-                    puntualidad.reset_index()
-                )
-
-                tabla_puntualidad.columns = [
-                    "Ruta",
-                    "Puntualidad"
-                ]
-
-                tabla_puntualidad["Puntualidad"] = (
-                    tabla_puntualidad["Puntualidad"]
-                    .astype(str) + "%"
-                )
-
-                st.dataframe(
-                    tabla_puntualidad,
                     use_container_width=True
                 )
 
