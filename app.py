@@ -28,7 +28,8 @@ CAPACIDAD_BUS = 22
 def grafico_interactivo(
     datos,
     titulo,
-    etiquetas_personalizadas=None
+    etiquetas_personalizadas=None,
+    color="#7DB7E8"
 ):
 
     if datos.empty:
@@ -60,12 +61,14 @@ def grafico_interactivo(
     # ==========================================
     if etiquetas_personalizadas is not None:
 
+        etiquetas = pd.to_numeric(
+            etiquetas_personalizadas,
+            errors="coerce"
+        ).fillna(0)
+
         df_chart["Etiqueta"] = (
-            pd.to_numeric(
-                etiquetas_personalizadas,
-                errors="coerce"
-            )
-            .fillna(0)
+            etiquetas
+            .round(0)
             .astype(int)
             .astype(str)
         )
@@ -74,6 +77,7 @@ def grafico_interactivo(
 
         df_chart["Etiqueta"] = (
             df_chart["Valor"]
+            .round(0)
             .astype(int)
             .astype(str)
         )
@@ -83,6 +87,14 @@ def grafico_interactivo(
     # ==========================================
     df_chart = df_chart.dropna(
         subset=["Ruta", "Valor"]
+    )
+
+    # ==========================================
+    # ORDENAR
+    # ==========================================
+    df_chart = df_chart.sort_values(
+        by="Valor",
+        ascending=False
     )
 
     # ==========================================
@@ -100,13 +112,14 @@ def grafico_interactivo(
     # ESTILO
     # ==========================================
     fig.update_traces(
-        marker_color="#7DB7E8",
+        marker_color=color,
         textposition="outside",
         textfont_size=15,
         textfont_color="white",
         hovertemplate=
         "<b>Ruta:</b> %{x}<br>" +
-        "<b>Total Real:</b> %{text}<extra></extra>"
+        "<b>Valor:</b> %{y}<br>" +
+        "<b>Promedio Total:</b> %{text}<extra></extra>"
     )
 
     fig.update_layout(
@@ -114,13 +127,13 @@ def grafico_interactivo(
         paper_bgcolor="#08142c",
         font_color="white",
         title_font_size=22,
-        title_x=0.2,
+        title_x=0.15,
         showlegend=False,
-        height=520,
+        height=550,
         xaxis_title="",
         yaxis_title="",
         margin=dict(
-            t=80,
+            t=90,
             l=20,
             r=20,
             b=20
@@ -137,19 +150,19 @@ def grafico_interactivo(
     )
 
     # ==========================================
-    # EVENTOS CLICK
+    # MOSTRAR
     # ==========================================
     selected_points = plotly_events(
         fig,
         click_event=True,
         hover_event=False,
         select_event=False,
-        override_height=520,
+        override_height=550,
         key=titulo
     )
 
     # ==========================================
-    # RUTA SELECCIONADA
+    # CLICK DINÁMICO
     # ==========================================
     ruta_seleccionada = None
 
@@ -169,6 +182,9 @@ archivo = st.file_uploader(
     type=["xlsx"]
 )
 
+# ==========================================
+# INICIO
+# ==========================================
 if archivo:
 
     try:
@@ -226,7 +242,7 @@ if archivo:
         )
 
         # ==========================================
-        # BUSCAR ENCABEZADO
+        # DETECTAR ENCABEZADO
         # ==========================================
         fila_encabezado = None
 
@@ -313,7 +329,7 @@ if archivo:
         )
 
         # ==========================================
-        # LIMPIAR RUTAS
+        # LIMPIAR RUTA
         # ==========================================
         if "RUTA" in df.columns:
 
@@ -373,7 +389,9 @@ if archivo:
             )
 
             lista_periodos = sorted(
-                df["PERIODO"].dropna().unique()
+                df["PERIODO"]
+                .dropna()
+                .unique()
             )
 
             periodo = st.sidebar.selectbox(
@@ -386,6 +404,18 @@ if archivo:
                 df = df[
                     df["PERIODO"] == periodo
                 ]
+
+        # ==========================================
+        # VISTA PREVIA
+        # ==========================================
+        st.success(
+            f"✅ Archivo procesado correctamente - Hoja {tipo_movimiento}"
+        )
+
+        st.dataframe(
+            df[columnas_visibles].head(),
+            use_container_width=True
+        )
 
         # ==========================================
         # POBLACIÓN
@@ -404,6 +434,9 @@ if archivo:
                 f"👥 Análisis de Población - {tipo_movimiento}"
             )
 
+            # ==========================================
+            # COLUMNAS
+            # ==========================================
             cols_aire = [
                 c for c in columnas_visibles
                 if "AIRE" in c.upper()
@@ -414,8 +447,14 @@ if archivo:
                 if "TIERRA" in c.upper()
             ]
 
+            # ==========================================
+            # COPIA
+            # ==========================================
             df_pasajeros = df.copy()
 
+            # ==========================================
+            # NUMÉRICOS
+            # ==========================================
             for col in cols_aire + cols_tierra:
 
                 df_pasajeros[col] = pd.to_numeric(
@@ -442,7 +481,7 @@ if archivo:
             )
 
             # ==========================================
-            # DETECTAR HORA
+            # HORA
             # ==========================================
             posibles_horas = [
                 "H. PARTIDA",
@@ -468,7 +507,7 @@ if archivo:
                 st.stop()
 
             # ==========================================
-            # CONSOLIDAR
+            # CONSOLIDADO REAL
             # ==========================================
             df_despachos = df_pasajeros.groupby(
                 ["FECHA", "RUTA", col_hora]
@@ -489,12 +528,6 @@ if archivo:
                 ) * 100
             )
 
-            df_despachos["Load_Factor_Real"] = (
-                df_despachos["Load_Factor_Real"]
-                .round(0)
-                .astype(int)
-            )
-
             # ==========================================
             # BUSES REQUERIDOS
             # ==========================================
@@ -505,13 +538,8 @@ if archivo:
                 )
             ).apply(np.ceil)
 
-            df_despachos["Buses_Requeridos"] = (
-                df_despachos["Buses_Requeridos"]
-                .astype(int)
-            )
-
             # ==========================================
-            # SATURACIÓN
+            # SOBREPOBLACIÓN
             # ==========================================
             df_despachos["Frecuencia_Saturada"] = (
                 df_despachos["Total_Pasajeros"]
@@ -519,7 +547,7 @@ if archivo:
             )
 
             # ==========================================
-            # PROMEDIOS REALES
+            # PROMEDIOS
             # ==========================================
             promedio_ruta = df_despachos.groupby(
                 "RUTA"
@@ -527,54 +555,71 @@ if archivo:
                 Promedio_Aire=("Total_Aire", "mean"),
                 Promedio_Tierra=("Total_Tierra", "mean"),
                 Promedio_Total=("Total_Pasajeros", "mean"),
-                Maximo_Pasajeros=("Total_Pasajeros", "max"),
-                Promedio_Load_Factor=("Load_Factor_Real", "mean"),
-                Maximo_Load_Factor=("Load_Factor_Real", "max"),
-                Veces_Saturada=("Frecuencia_Saturada", "sum"),
+                Load_Factor=("Load_Factor_Real", "mean"),
                 Maximo_Buses_Usados=("Buses_Despachados", "max"),
-                Promedio_Buses_Requeridos=("Buses_Requeridos", "mean")
-            ).round(0)
-
-            promedio_ruta = (
-                promedio_ruta
-                .astype(int)
-            )
+                Veces_Saturada=("Frecuencia_Saturada", "sum")
+            ).round(1)
 
             # ==========================================
-            # RUTA SELECCIONADA
+            # ELIMINAR VACÍOS
             # ==========================================
-            ruta_seleccionada = None
+            promedio_ruta = promedio_ruta[
+                promedio_ruta.index.notna()
+            ]
+
+            promedio_ruta = promedio_ruta[
+                promedio_ruta.index != ""
+            ]
 
             # ==========================================
-            # AIRE
+            # FILTRAR CEROS
             # ==========================================
             if submenu_poblacion == "✈️ Aire":
 
-                st.header(
-                    f"✈️ Población Aire - {tipo_movimiento}"
+                promedio_ruta = promedio_ruta[
+                    promedio_ruta["Promedio_Aire"] > 0
+                ]
+
+            else:
+
+                promedio_ruta = promedio_ruta[
+                    promedio_ruta["Promedio_Tierra"] > 0
+                ]
+
+            # ==========================================
+            # GRAFICA AIRE
+            # ==========================================
+            ruta_seleccionada = None
+
+            if submenu_poblacion == "✈️ Aire":
+
+                st.subheader(
+                    "✈️ Promedio de población del personal de Aire por ruta"
                 )
 
                 ruta_seleccionada = grafico_interactivo(
                     promedio_ruta["Promedio_Aire"],
-                    "✈️ Promedio Pasajeros Aire",
+                    "✈️ Promedio Aire",
                     etiquetas_personalizadas=
-                    promedio_ruta["Promedio_Total"]
+                    promedio_ruta["Promedio_Total"],
+                    color="#63B3ED"
                 )
 
             # ==========================================
-            # TIERRA
+            # GRAFICA TIERRA
             # ==========================================
             elif submenu_poblacion == "🌎 Tierra":
 
-                st.header(
-                    f"🌎 Población Tierra - {tipo_movimiento}"
+                st.subheader(
+                    "🌎 Promedio de población del personal de Tierra por ruta"
                 )
 
                 ruta_seleccionada = grafico_interactivo(
                     promedio_ruta["Promedio_Tierra"],
-                    "🌎 Promedio Pasajeros Tierra",
+                    "🌎 Promedio Tierra",
                     etiquetas_personalizadas=
-                    promedio_ruta["Promedio_Total"]
+                    promedio_ruta["Promedio_Total"],
+                    color="#68D391"
                 )
 
             # ==========================================
@@ -595,27 +640,28 @@ if archivo:
                 ]
 
             # ==========================================
-            # KPI PRINCIPALES
+            # KPI
             # ==========================================
             st.markdown("---")
 
             col1, col2, col3, col4 = st.columns(4)
 
             col1.metric(
-                "👥 Promedio General Real",
-                int(
+                "👥 Promedio General",
+                round(
                     promedio_ruta["Promedio_Total"]
-                    .mean()
+                    .mean(),
+                    1
                 )
             )
 
             col2.metric(
                 "🚌 LOAD FACTOR",
                 str(
-                    int(
-                        promedio_ruta[
-                            "Maximo_Load_Factor"
-                        ].max()
+                    round(
+                        promedio_ruta["Load_Factor"]
+                        .mean(),
+                        1
                     )
                 ) + "%"
             )
@@ -643,17 +689,18 @@ if archivo:
             # ==========================================
             st.markdown("---")
 
-            st.header(
-                "🚌 Saturación Real Promedio"
+            st.subheader(
+                "🚌 Load Factor Promedio por Ruta"
             )
 
             grafico_interactivo(
-                promedio_ruta["Promedio_Load_Factor"],
-                "🚌 Saturación Real (%)"
+                promedio_ruta["Load_Factor"],
+                "🚌 Load Factor (%)",
+                color="#F6AD55"
             )
 
             # ==========================================
-            # TABLA RESUMEN
+            # RESUMEN
             # ==========================================
             st.markdown("---")
 
@@ -661,10 +708,26 @@ if archivo:
                 "📊 Resumen General"
             )
 
-            tabla_load = promedio_ruta.reset_index()
+            resumen = promedio_ruta.reset_index()
+
+            resumen.columns = [
+                "Ruta",
+                "Promedio Aire",
+                "Promedio Tierra",
+                "Promedio Total",
+                "Load Factor",
+                "Máx. Buses Utilizados",
+                "Cant. Sobrepoblación"
+            ]
+
+            resumen["Load Factor"] = (
+                resumen["Load Factor"]
+                .round(1)
+                .astype(str) + "%"
+            )
 
             st.dataframe(
-                tabla_load,
+                resumen,
                 use_container_width=True
             )
 
@@ -678,6 +741,7 @@ if archivo:
             )
 
             detalle_operativo = df_despachos[[
+
                 "FECHA",
                 "RUTA",
                 col_hora,
@@ -687,9 +751,11 @@ if archivo:
                 "Load_Factor_Real",
                 "Buses_Despachados",
                 "Buses_Requeridos"
+
             ]].copy()
 
             detalle_operativo.columns = [
+
                 "Fecha",
                 "Ruta",
                 "Hora",
@@ -699,10 +765,12 @@ if archivo:
                 "Load Factor Real",
                 "Buses Utilizados",
                 "Buses Requeridos"
+
             ]
 
             detalle_operativo["Load Factor Real"] = (
                 detalle_operativo["Load Factor Real"]
+                .round(1)
                 .astype(str) + "%"
             )
 
@@ -798,7 +866,8 @@ if archivo:
 
                 grafico_interactivo(
                     veces_tarde,
-                    "🚨 Cantidad de Veces Tarde"
+                    "🚨 Cantidad de Veces Tarde",
+                    color="#FC8181"
                 )
 
                 st.dataframe(
