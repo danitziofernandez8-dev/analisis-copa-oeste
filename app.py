@@ -29,9 +29,7 @@ def extraer_numero_ruta(ruta):
 # FORMATO ETIQUETAS
 # ==========================================
 def formatear_valor(valor, porcentaje=False):
-    if porcentaje:
-        return f"{round(valor,1)}%"
-    return f"{int(round(valor,0))}"
+    return f"{round(valor,1)}%" if porcentaje else f"{int(round(valor,0))}"
 
 
 # ==========================================
@@ -40,7 +38,7 @@ def formatear_valor(valor, porcentaje=False):
 def grafico_interactivo(datos, titulo, porcentaje=False, color="#7DB7E8"):
 
     if datos.empty:
-        st.warning(f"⚠️ No hay datos para: {titulo}")
+        st.warning(f"⚠️ Sin datos: {titulo}")
         return None
 
     df_chart = pd.DataFrame({
@@ -48,13 +46,12 @@ def grafico_interactivo(datos, titulo, porcentaje=False, color="#7DB7E8"):
         "Valor": datos.values
     })
 
+    # ORDEN REAL F1, F2, F3...
     df_chart["Orden"] = df_chart["Ruta"].apply(extraer_numero_ruta)
 
     df_chart = df_chart.sort_values(["Orden", "Valor"], ascending=[True, False])
 
-    # ==========================================
-    # ETIQUETAS ARRIBA (FORMATO DINÁMICO)
-    # ==========================================
+    # ETIQUETAS ARRIBA
     df_chart["Etiqueta"] = df_chart["Valor"].apply(
         lambda x: formatear_valor(x, porcentaje)
     )
@@ -68,7 +65,7 @@ def grafico_interactivo(datos, titulo, porcentaje=False, color="#7DB7E8"):
     )
 
     fig.update_traces(
-        textposition="outside",   # ⭐ ARRIBA DE LAS BARRAS
+        textposition="outside",
         marker_color=color,
         textfont_color="white",
         hovertemplate="<b>Ruta:</b> %{x}<br><b>Valor:</b> %{y}<extra></extra>"
@@ -102,19 +99,14 @@ if archivo:
         st.sidebar.header("⚙️ Configuración")
 
         tipo_movimiento = st.sidebar.radio("Movimiento", ["ENTRADA", "SALIDA"])
-
         tipo_analisis = st.sidebar.radio("Análisis", ["👥 Población", "⏱️ Tiempos"])
 
         # ==========================================
-        # EXCEL
+        # LEER EXCEL
         # ==========================================
         excel = pd.ExcelFile(archivo)
 
-        hoja = None
-        for h in excel.sheet_names:
-            if h.strip().upper() == tipo_movimiento:
-                hoja = h
-                break
+        hoja = next((h for h in excel.sheet_names if h.strip().upper() == tipo_movimiento), None)
 
         if hoja is None:
             st.error("❌ Hoja no encontrada")
@@ -174,11 +166,7 @@ if archivo:
                 7:"Jul",8:"Ago",9:"Sep",10:"Oct",11:"Nov",12:"Dic"
             }
 
-            df["PERIODO"] = (
-                df["FECHA"].dt.year.astype(str)
-                + "-"
-                + df["FECHA"].dt.month.map(meses)
-            )
+            df["PERIODO"] = df["FECHA"].dt.year.astype(str) + "-" + df["FECHA"].dt.month.map(meses)
 
             mes = st.sidebar.selectbox(
                 "📅 Mes",
@@ -198,10 +186,7 @@ if archivo:
 
             st.header("👥 Análisis de Población")
 
-            submenu = st.sidebar.radio(
-                "Vista",
-                ["✈️ Aire", "🌎 Tierra", "📊 General"]
-            )
+            submenu = st.sidebar.radio("Vista", ["✈️ Aire", "🌎 Tierra", "📊 General"])
 
             cols_aire = [c for c in visibles if "AIRE" in c.upper()]
             cols_tierra = [c for c in visibles if "TIERRA" in c.upper()]
@@ -211,9 +196,6 @@ if archivo:
             for c in cols_aire + cols_tierra:
                 d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0)
 
-            # ==========================================
-            # TOTALES
-            # ==========================================
             d["Aire"] = d[cols_aire].sum(axis=1)
             d["Tierra"] = d[cols_tierra].sum(axis=1)
             d["General"] = d["Aire"] + d["Tierra"]
@@ -224,47 +206,50 @@ if archivo:
                 st.error("Sin hora")
                 st.stop()
 
-            df_d = d.groupby(["FECHA","RUTA",col_hora]).agg(
-                Aire=("Aire","sum"),
-                Tierra=("Tierra","sum"),
-                General=("General","sum"),
-                Buses=("UNIDAD","nunique")
+            # ==========================================
+            # 🔥 EVENTOS CORREGIDOS (VIAJES REALES)
+            # ==========================================
+            df_d = d.drop_duplicates(
+                subset=["FECHA", "RUTA", "UNIDAD"]
+            ).groupby(
+                ["FECHA", "RUTA"]
+            ).agg(
+                Aire=("Aire", "sum"),
+                Tierra=("Tierra", "sum"),
+                General=("General", "sum"),
+                Eventos=("UNIDAD", "nunique")
             ).reset_index()
 
-            df_d["Capacidad"] = df_d["Buses"] * CAPACIDAD_BUS
+            df_d["Capacidad"] = df_d["Eventos"] * CAPACIDAD_BUS
             df_d["Load_Factor"] = df_d["General"] / df_d["Capacidad"] * 100
-            df_d["Req_Buses"] = np.ceil(df_d["General"] / CAPACIDAD_BUS)
-            df_d["Saturado"] = df_d["General"] > df_d["Capacidad"]
 
             # ==========================================
-            # RUTA (SIN SESGO)
+            # RUTA
             # ==========================================
             ruta = df_d.groupby("RUTA").agg(
                 Total_Aire=("Aire","sum"),
                 Total_Tierra=("Tierra","sum"),
                 Total_General=("General","sum"),
-                Eventos=("General","count"),
-                Max_Buses=("Buses","max"),
-                Saturaciones=("Saturado","sum")
+                Eventos=("Eventos","sum"),
+                Max_Buses=("Eventos","max")
             )
 
             ruta["Prom_Aire"] = ruta["Total_Aire"] / ruta["Eventos"]
             ruta["Prom_Tierra"] = ruta["Total_Tierra"] / ruta["Eventos"]
             ruta["Prom_General"] = ruta["Total_General"] / ruta["Eventos"]
-
             ruta["Load_Factor"] = ruta["Total_General"] / (ruta["Eventos"] * CAPACIDAD_BUS) * 100
 
             # ==========================================
             # GRÁFICOS
             # ==========================================
             if submenu == "✈️ Aire":
-                grafico_interactivo(ruta["Prom_Aire"], "Aire", porcentaje=False, color="#63B3ED")
+                grafico_interactivo(ruta["Prom_Aire"], "Aire", False, "#63B3ED")
 
             elif submenu == "🌎 Tierra":
-                grafico_interactivo(ruta["Prom_Tierra"], "Tierra", porcentaje=False, color="#68D391")
+                grafico_interactivo(ruta["Prom_Tierra"], "Tierra", False, "#68D391")
 
             else:
-                grafico_interactivo(ruta["Prom_General"], "General", porcentaje=False, color="#F6AD55")
+                grafico_interactivo(ruta["Prom_General"], "General", False, "#F6AD55")
 
             # ==========================================
             # KPIs
@@ -274,8 +259,8 @@ if archivo:
 
             c1.metric("Promedio General", round(df_d["General"].mean(),1))
             c2.metric("Load Factor", f"{round(ruta['Load_Factor'].mean(),1)}%")
-            c3.metric("Max Buses", int(ruta["Max_Buses"].max()))
-            c4.metric("Saturaciones", int(ruta["Saturaciones"].sum()))
+            c3.metric("Max Eventos", int(ruta["Max_Buses"].max()))
+            c4.metric("Total Eventos", int(ruta["Eventos"].sum()))
 
             st.dataframe(ruta.reset_index(), use_container_width=True)
 
@@ -301,15 +286,15 @@ if archivo:
 
                 tarde = dt.groupby("RUTA")["Delay"].apply(lambda x: (x > 0).sum())
 
-                grafico_interactivo(tarde, "Veces Tarde", porcentaje=False, color="#FC8181")
+                grafico_interactivo(tarde, "Veces Tarde", False, "#FC8181")
 
                 st.dataframe(tarde.reset_index(), use_container_width=True)
 
             else:
-                st.error("❌ No hay columnas de tiempo válidas")
+                st.error("❌ No hay columnas válidas")
 
     except Exception as e:
-        st.error(f"❌ Error general: {e}")
+        st.error(f"❌ Error: {e}")
         # =====================================================================
         # === BOTÓN DE DESCARGA DIRECTA (REEMPLAZA DROPBOX SEGURO EN LA WEB) ===
         # =====================================================================
