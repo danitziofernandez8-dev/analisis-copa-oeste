@@ -20,7 +20,7 @@ st.title("🚌 Análisis de Rutas - Copa Oeste")
 CAPACIDAD_BUS = 22
 
 # ==========================================
-# FUNCIÓN GRÁFICO
+# FUNCIÓN GRÁFICO INTERACTIVO
 # ==========================================
 def grafico_interactivo(
     datos,
@@ -34,7 +34,7 @@ def grafico_interactivo(
             f"⚠️ No hay datos para mostrar en: {titulo}"
         )
 
-        return
+        return None
 
     # ==========================================
     # DATAFRAME
@@ -50,7 +50,11 @@ def grafico_interactivo(
     if etiquetas_personalizadas is not None:
 
         df_chart["Etiqueta"] = (
-            etiquetas_personalizadas
+            pd.to_numeric(
+                etiquetas_personalizadas,
+                errors="coerce"
+            )
+            .fillna(0)
             .astype(int)
             .astype(str)
         )
@@ -58,7 +62,11 @@ def grafico_interactivo(
     else:
 
         df_chart["Etiqueta"] = (
-            datos
+            pd.to_numeric(
+                datos,
+                errors="coerce"
+            )
+            .fillna(0)
             .astype(int)
             .astype(str)
         )
@@ -75,31 +83,28 @@ def grafico_interactivo(
     )
 
     # ==========================================
-    # COLORES
+    # ESTILO
     # ==========================================
     fig.update_traces(
         marker_color="#7DB7E8",
         textposition="outside",
-        textfont_size=16,
+        textfont_size=15,
         textfont_color="white",
         hovertemplate=
         "<b>Ruta:</b> %{x}<br>" +
-        "<b>Valor:</b> %{text}<extra></extra>"
+        "<b>Total Real:</b> %{text}<extra></extra>"
     )
 
-    # ==========================================
-    # ESTILO
-    # ==========================================
     fig.update_layout(
         plot_bgcolor="#08142c",
         paper_bgcolor="#08142c",
         font_color="white",
-        title_font_size=24,
-        title_x=0.25,
-        xaxis_title="",
-        yaxis_title="",
+        title_font_size=22,
+        title_x=0.2,
         showlegend=False,
         height=520,
+        xaxis_title="",
+        yaxis_title="",
         margin=dict(
             t=80,
             l=20,
@@ -108,28 +113,39 @@ def grafico_interactivo(
         )
     )
 
-    # ==========================================
-    # EJE X
-    # ==========================================
     fig.update_xaxes(
         showgrid=False
     )
 
-    # ==========================================
-    # EJE Y
-    # ==========================================
     fig.update_yaxes(
         showgrid=True,
         gridcolor="rgba(255,255,255,0.08)"
     )
 
     # ==========================================
-    # MOSTRAR
+    # EVENTOS CLICK
     # ==========================================
-    st.plotly_chart(
+    selected_points = plotly_events(
         fig,
-        use_container_width=True
+        click_event=True,
+        hover_event=False,
+        select_event=False,
+        override_height=520,
+        key=titulo
     )
+
+    # ==========================================
+    # RUTA SELECCIONADA
+    # ==========================================
+    ruta_seleccionada = None
+
+    if selected_points:
+
+        ruta_seleccionada = (
+            selected_points[0]["x"]
+        )
+
+    return ruta_seleccionada
 
 # ==========================================
 # SUBIR ARCHIVO
@@ -220,7 +236,10 @@ if archivo:
 
         if fila_encabezado is None:
 
-            st.error("❌ No se detectó encabezado")
+            st.error(
+                "❌ No se detectó encabezado"
+            )
+
             st.stop()
 
         # ==========================================
@@ -498,9 +517,11 @@ if archivo:
             # ==========================================
             # GRÁFICAS
             # ==========================================
+            ruta_seleccionada = None
+
             if submenu_poblacion == "✈️ Aire":
 
-                grafico_interactivo(
+                ruta_seleccionada = grafico_interactivo(
                     promedio_ruta["Promedio_Aire"],
                     "✈️ Promedio Real Pasajeros Aire",
                     etiquetas_personalizadas=promedio_ruta["Promedio_Total"]
@@ -508,11 +529,28 @@ if archivo:
 
             elif submenu_poblacion == "🌎 Tierra":
 
-                grafico_interactivo(
+                ruta_seleccionada = grafico_interactivo(
                     promedio_ruta["Promedio_Tierra"],
                     "🌎 Promedio Real Pasajeros Tierra",
                     etiquetas_personalizadas=promedio_ruta["Promedio_Total"]
                 )
+
+            # ==========================================
+            # FILTRO DINÁMICO
+            # ==========================================
+            if ruta_seleccionada:
+
+                st.success(
+                    f"📍 Ruta seleccionada: {ruta_seleccionada}"
+                )
+
+                promedio_ruta = promedio_ruta[
+                    promedio_ruta.index == ruta_seleccionada
+                ]
+
+                df_despachos = df_despachos[
+                    df_despachos["RUTA"] == ruta_seleccionada
+                ]
 
             # ==========================================
             # KPIs
@@ -522,7 +560,7 @@ if archivo:
             col1, col2, col3, col4 = st.columns(4)
 
             col1.metric(
-                "👥 Promedio Total",
+                "👥 Promedio Total Real",
                 int(
                     promedio_ruta["Promedio_Total"]
                     .mean()
@@ -569,7 +607,9 @@ if archivo:
 
             grafico_interactivo(
                 promedio_ruta["Promedio_Load_Factor"],
-                "🚌 Saturación Real"
+                "🚌 Saturación Real",
+                etiquetas_personalizadas=
+                promedio_ruta["Promedio_Load_Factor"]
             )
 
             # ==========================================
@@ -714,7 +754,9 @@ if archivo:
 
                 grafico_interactivo(
                     veces_tarde,
-                    "🚨 Cantidad de Veces Tarde"
+                    "🚨 Cantidad de Veces Tarde",
+                    etiquetas_personalizadas=
+                    veces_tarde
                 )
 
                 st.dataframe(
