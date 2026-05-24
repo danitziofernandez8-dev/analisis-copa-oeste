@@ -51,13 +51,16 @@ def grafico_interactivo(
 
         df_chart["Etiqueta"] = (
             etiquetas_personalizadas
+            .astype(int)
             .astype(str)
         )
 
     else:
 
         df_chart["Etiqueta"] = (
-            datos.astype(str)
+            datos
+            .astype(int)
+            .astype(str)
         )
 
     # ==========================================
@@ -72,24 +75,52 @@ def grafico_interactivo(
     )
 
     # ==========================================
-    # ESTILO
+    # COLORES
     # ==========================================
-    fig.update_layout(
-        plot_bgcolor="#0b132b",
-        paper_bgcolor="#0b132b",
-        font_color="white",
-        title_font_size=20,
-        xaxis_title="",
-        yaxis_title="",
-        showlegend=False,
-        height=500
+    fig.update_traces(
+        marker_color="#7DB7E8",
+        textposition="outside",
+        textfont_size=16,
+        textfont_color="white",
+        hovertemplate=
+        "<b>Ruta:</b> %{x}<br>" +
+        "<b>Valor:</b> %{text}<extra></extra>"
     )
 
     # ==========================================
-    # TEXTO
+    # ESTILO
     # ==========================================
-    fig.update_traces(
-        textposition="outside"
+    fig.update_layout(
+        plot_bgcolor="#08142c",
+        paper_bgcolor="#08142c",
+        font_color="white",
+        title_font_size=24,
+        title_x=0.25,
+        xaxis_title="",
+        yaxis_title="",
+        showlegend=False,
+        height=520,
+        margin=dict(
+            t=80,
+            l=20,
+            r=20,
+            b=20
+        )
+    )
+
+    # ==========================================
+    # EJE X
+    # ==========================================
+    fig.update_xaxes(
+        showgrid=False
+    )
+
+    # ==========================================
+    # EJE Y
+    # ==========================================
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.08)"
     )
 
     # ==========================================
