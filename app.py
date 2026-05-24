@@ -21,7 +21,12 @@ CAPACIDAD_BUS = 22
 # ==========================================
 # FUNCIÓN GRÁFICOS
 # ==========================================
-def grafico_barras(datos, titulo, sufijo=""):
+def grafico_barras(
+    datos,
+    titulo,
+    sufijo="",
+    etiquetas_personalizadas=None
+):
 
     if datos.empty:
         st.warning(f"⚠️ No hay datos para mostrar en: {titulo}")
@@ -92,14 +97,25 @@ def grafico_barras(datos, titulo, sufijo=""):
     # ==========================================
     # ETIQUETAS
     # ==========================================
-    for barra in barras:
+    for i, barra in enumerate(barras):
 
         altura = barra.get_height()
+
+        if etiquetas_personalizadas is not None:
+
+            texto = (
+                f"{int(etiquetas_personalizadas.iloc[i])}"
+                f"{sufijo}"
+            )
+
+        else:
+
+            texto = f"{int(altura)}{sufijo}"
 
         ax.text(
             barra.get_x() + barra.get_width() / 2,
             altura + (valor_maximo * 0.02),
-            f"{int(altura)}{sufijo}",
+            texto,
             ha="center",
             fontsize=11,
             fontweight="bold",
@@ -506,17 +522,20 @@ if archivo:
 
                 grafico_barras(
                     promedio_ruta["Promedio_Aire"],
-                    "✈️ Promedio Real Pasajeros Aire"
+                    "✈️ Promedio Real Pasajeros Aire",
+                    etiquetas_personalizadas=promedio_ruta["Promedio_Total"]
                 )
 
                 tabla_aire = promedio_ruta[[
                     "Promedio_Aire",
+                    "Promedio_Total",
                     "Maximo_Pasajeros",
                     "Veces_Saturada"
                 ]].copy()
 
                 tabla_aire.columns = [
                     "Promedio Aire",
+                    "Promedio Total",
                     "Máximo Pasajeros",
                     "Veces Saturada"
                 ]
@@ -537,17 +556,20 @@ if archivo:
 
                 grafico_barras(
                     promedio_ruta["Promedio_Tierra"],
-                    "🌎 Promedio Real Pasajeros Tierra"
+                    "🌎 Promedio Real Pasajeros Tierra",
+                    etiquetas_personalizadas=promedio_ruta["Promedio_Total"]
                 )
 
                 tabla_tierra = promedio_ruta[[
                     "Promedio_Tierra",
+                    "Promedio_Total",
                     "Maximo_Pasajeros",
                     "Veces_Saturada"
                 ]].copy()
 
                 tabla_tierra.columns = [
                     "Promedio Tierra",
+                    "Promedio Total",
                     "Máximo Pasajeros",
                     "Veces Saturada"
                 ]
