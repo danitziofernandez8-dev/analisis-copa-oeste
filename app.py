@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
+import plotly.express as px
+from streamlit_plotly_events import plotly_events
 
 # ==========================================
 # CONFIGURACIÓN PÁGINA
@@ -19,112 +20,92 @@ st.title("🚌 Análisis de Rutas - Copa Oeste")
 CAPACIDAD_BUS = 22
 
 # ==========================================
-# FUNCIÓN GRÁFICOS
+# FUNCIÓN GRÁFICO INTERACTIVO
 # ==========================================
-def grafico_barras(
+def grafico_interactivo(
     datos,
     titulo,
-    sufijo="",
-    etiquetas_personalizadas=None
+    etiquetas_personalizadas=None,
+    sufijo=""
 ):
 
     if datos.empty:
-        st.warning(f"⚠️ No hay datos para mostrar en: {titulo}")
-        return
 
-    colores = [
-        "#C9A227",
-        "#5B8CC0",
-        "#E0C76A",
-        "#7FA7D8",
-        "#D8C27A",
-        "#2F5D9A",
-        "#F2E3A3",
-        "#4F81BD"
-    ]
+        st.warning(
+            f"⚠️ No hay datos para mostrar en: {titulo}"
+        )
 
-    colores_final = (
-        colores * ((len(datos) // len(colores)) + 1)
-    )[:len(datos)]
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-
-    barras = ax.bar(
-        datos.index.astype(str),
-        datos.values,
-        color=colores_final,
-        edgecolor="white",
-        linewidth=2
-    )
+        return None
 
     # ==========================================
-    # FONDO OSCURO
+    # DATAFRAME
     # ==========================================
-    fig.patch.set_facecolor("#0b132b")
-    ax.set_facecolor("#0b132b")
-
-    # ==========================================
-    # ESTILO
-    # ==========================================
-    ax.spines["right"].set_visible(False)
-    ax.spines["top"].set_visible(False)
-    ax.spines["left"].set_visible(False)
-
-    ax.spines["bottom"].set_color("white")
-
-    ax.grid(False)
-
-    ax.set_title(
-        titulo,
-        fontsize=16,
-        fontweight="bold",
-        color="white",
-        pad=20
-    )
-
-    ax.set_ylabel("")
-    ax.set_xlabel("")
-    ax.set_yticks([])
-
-    ax.tick_params(
-        axis="x",
-        labelsize=10,
-        colors="white"
-    )
-
-    valor_maximo = max(datos.values)
+    df_chart = pd.DataFrame({
+        "Ruta": datos.index.astype(str),
+        "Valor": datos.values
+    })
 
     # ==========================================
     # ETIQUETAS
     # ==========================================
-    for i, barra in enumerate(barras):
+    if etiquetas_personalizadas is not None:
 
-        altura = barra.get_height()
-
-        if etiquetas_personalizadas is not None:
-
-            texto = (
-                f"{int(etiquetas_personalizadas.iloc[i])}"
-                f"{sufijo}"
-            )
-
-        else:
-
-            texto = f"{int(altura)}{sufijo}"
-
-        ax.text(
-            barra.get_x() + barra.get_width() / 2,
-            altura + (valor_maximo * 0.02),
-            texto,
-            ha="center",
-            fontsize=11,
-            fontweight="bold",
-            color="white"
+        df_chart["Etiqueta"] = (
+            etiquetas_personalizadas.values
         )
 
-    ax.set_ylim(0, valor_maximo * 1.15)
+    else:
 
-    st.pyplot(fig)
+        df_chart["Etiqueta"] = datos.values
+
+    # ==========================================
+    # GRÁFICA
+    # ==========================================
+    fig = px.bar(
+        df_chart,
+        x="Ruta",
+        y="Valor",
+        text="Etiqueta",
+        title=titulo
+    )
+
+    # ==========================================
+    # ESTILO
+    # ==========================================
+    fig.update_layout(
+        plot_bgcolor="#0b132b",
+        paper_bgcolor="#0b132b",
+        font_color="white",
+        title_font_size=20,
+        xaxis_title="",
+        yaxis_title="",
+        showlegend=False,
+        height=500
+    )
+
+    fig.update_traces(
+        texttemplate="%{text}" + sufijo,
+        textposition="outside"
+    )
+
+    # ==========================================
+    # EVENTO CLICK
+    # ==========================================
+    selected_points = plotly_events(
+        fig,
+        click_event=True,
+        hover_event=True
+    )
+
+    ruta_seleccionada = None
+
+    if selected_points:
+
+        ruta_seleccionada = (
+            selected_points[0]["x"]
+        )
+
+    return ruta_seleccionada
 
 # ==========================================
 # SUBIR ARCHIVO
@@ -245,9 +226,6 @@ if archivo:
 
                 nombre_base = col_str
 
-                # ==========================================
-                # EVITAR DUPLICADOS
-                # ==========================================
                 if nombre_base in contador_columnas:
 
                     contador_columnas[nombre_base] += 1
@@ -439,7 +417,7 @@ if archivo:
                 st.stop()
 
             # ==========================================
-            # CONSOLIDAR FRECUENCIAS
+            # CONSOLIDAR
             # ==========================================
             df_despachos = df_pasajeros.groupby(
                 ["FECHA", "RUTA", col_hora]
@@ -512,6 +490,11 @@ if archivo:
             )
 
             # ==========================================
+            # RUTA SELECCIONADA
+            # ==========================================
+            ruta_seleccionada = None
+
+            # ==========================================
             # AIRE
             # ==========================================
             if submenu_poblacion == "✈️ Aire":
@@ -520,29 +503,10 @@ if archivo:
                     f"✈️ Población Aire - {tipo_movimiento}"
                 )
 
-                grafico_barras(
+                ruta_seleccionada = grafico_interactivo(
                     promedio_ruta["Promedio_Aire"],
                     "✈️ Promedio Real Pasajeros Aire",
                     etiquetas_personalizadas=promedio_ruta["Promedio_Total"]
-                )
-
-                tabla_aire = promedio_ruta[[
-                    "Promedio_Aire",
-                    "Promedio_Total",
-                    "Maximo_Pasajeros",
-                    "Veces_Saturada"
-                ]].copy()
-
-                tabla_aire.columns = [
-                    "Promedio Aire",
-                    "Promedio Total",
-                    "Máximo Pasajeros",
-                    "Veces Saturada"
-                ]
-
-                st.dataframe(
-                    tabla_aire,
-                    use_container_width=True
                 )
 
             # ==========================================
@@ -554,75 +518,94 @@ if archivo:
                     f"🌎 Población Tierra - {tipo_movimiento}"
                 )
 
-                grafico_barras(
+                ruta_seleccionada = grafico_interactivo(
                     promedio_ruta["Promedio_Tierra"],
                     "🌎 Promedio Real Pasajeros Tierra",
                     etiquetas_personalizadas=promedio_ruta["Promedio_Total"]
                 )
 
-                tabla_tierra = promedio_ruta[[
-                    "Promedio_Tierra",
-                    "Promedio_Total",
-                    "Maximo_Pasajeros",
-                    "Veces_Saturada"
-                ]].copy()
+            # ==========================================
+            # FILTRAR SEGÚN CLICK
+            # ==========================================
+            if ruta_seleccionada:
 
-                tabla_tierra.columns = [
-                    "Promedio Tierra",
-                    "Promedio Total",
-                    "Máximo Pasajeros",
-                    "Veces Saturada"
-                ]
-
-                st.dataframe(
-                    tabla_tierra,
-                    use_container_width=True
+                st.success(
+                    f"📍 Ruta seleccionada: {ruta_seleccionada}"
                 )
 
+                promedio_ruta = promedio_ruta[
+                    promedio_ruta.index == ruta_seleccionada
+                ]
+
+                df_despachos = df_despachos[
+                    df_despachos["RUTA"] == ruta_seleccionada
+                ]
+
             # ==========================================
-            # LOAD FACTOR REAL
+            # KPIs
             # ==========================================
             st.markdown("---")
 
-            st.header("🚌 Load Factor Real de Frecuencia")
+            col1, col2, col3, col4 = st.columns(4)
 
-            load_factor_ruta = promedio_ruta[
-                "Promedio_Load_Factor"
-            ]
-
-            grafico_barras(
-                load_factor_ruta,
-                "🚌 Saturación Real Promedio",
-                "%"
+            col1.metric(
+                "👥 Promedio Total",
+                int(
+                    promedio_ruta["Promedio_Total"]
+                    .mean()
+                )
             )
 
-            tabla_load = promedio_ruta.reset_index()[[
-                "RUTA",
-                "Promedio_Load_Factor",
-                "Maximo_Load_Factor",
-                "Veces_Saturada",
-                "Maximo_Buses_Usados",
-                "Promedio_Buses_Requeridos"
-            ]]
-
-            tabla_load.columns = [
-                "Ruta",
-                "Promedio Saturación",
-                "Máxima Saturación",
-                "Veces Saturada",
-                "Máx. Buses Utilizados",
-                "Promedio Buses Requeridos"
-            ]
-
-            tabla_load["Promedio Saturación"] = (
-                tabla_load["Promedio Saturación"]
-                .astype(str) + "%"
+            col2.metric(
+                "🚨 Máxima Saturación",
+                str(
+                    int(
+                        promedio_ruta[
+                            "Maximo_Load_Factor"
+                        ].max()
+                    )
+                ) + "%"
             )
 
-            tabla_load["Máxima Saturación"] = (
-                tabla_load["Máxima Saturación"]
-                .astype(str) + "%"
+            col3.metric(
+                "🚌 Máx. Buses Utilizados",
+                int(
+                    promedio_ruta[
+                        "Maximo_Buses_Usados"
+                    ].max()
+                )
             )
+
+            col4.metric(
+                "⚠️ Veces Saturada",
+                int(
+                    promedio_ruta[
+                        "Veces_Saturada"
+                    ].sum()
+                )
+            )
+
+            # ==========================================
+            # LOAD FACTOR
+            # ==========================================
+            st.markdown("---")
+
+            st.header(
+                "🚌 Saturación Real Promedio"
+            )
+
+            grafico_interactivo(
+                promedio_ruta["Promedio_Load_Factor"],
+                "🚌 Saturación Real",
+                sufijo="%"
+            )
+
+            # ==========================================
+            # TABLA
+            # ==========================================
+            st.markdown("---")
+
+            tabla_load = promedio_ruta.reset_index()
 
             st.dataframe(
                 tabla_load,
@@ -634,7 +617,9 @@ if archivo:
             # ==========================================
             st.markdown("---")
 
-            st.subheader("📋 Detalle Operativo por Frecuencia")
+            st.subheader(
+                "📋 Detalle Operativo"
+            )
 
             detalle_operativo = df_despachos[[
                 "FECHA",
@@ -679,9 +664,6 @@ if archivo:
                 f"⏱️ Análisis de Tiempos - {tipo_movimiento}"
             )
 
-            # ==========================================
-            # DETECTAR COLUMNAS
-            # ==========================================
             col_programada = None
 
             posibles_programadas = [
@@ -746,11 +728,6 @@ if archivo:
                     df_tiempos["Diferencia_Min"] > 0
                 )
 
-                # ==========================================
-                # VECES TARDE
-                # ==========================================
-                st.markdown("---")
-
                 veces_tarde = df_tiempos.groupby(
                     "RUTA"
                 )["Llego_Tarde"].sum()
@@ -761,7 +738,9 @@ if archivo:
                     .astype(int)
                 )
 
-                grafico_barras(
+                st.markdown("---")
+
+                grafico_interactivo(
                     veces_tarde,
                     "🚨 Cantidad de Veces Tarde"
                 )
