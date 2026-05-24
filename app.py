@@ -20,13 +20,12 @@ st.title("🚌 Análisis de Rutas - Copa Oeste")
 CAPACIDAD_BUS = 22
 
 # ==========================================
-# FUNCIÓN GRÁFICO INTERACTIVO
+# FUNCIÓN GRÁFICO
 # ==========================================
 def grafico_interactivo(
     datos,
     titulo,
-    etiquetas_personalizadas=None,
-    sufijo=""
+    etiquetas_personalizadas=None
 ):
 
     if datos.empty:
@@ -35,7 +34,7 @@ def grafico_interactivo(
             f"⚠️ No hay datos para mostrar en: {titulo}"
         )
 
-        return None
+        return
 
     # ==========================================
     # DATAFRAME
@@ -51,12 +50,15 @@ def grafico_interactivo(
     if etiquetas_personalizadas is not None:
 
         df_chart["Etiqueta"] = (
-            etiquetas_personalizadas.values
+            etiquetas_personalizadas
+            .astype(str)
         )
 
     else:
 
-        df_chart["Etiqueta"] = datos.values
+        df_chart["Etiqueta"] = (
+            datos.astype(str)
+        )
 
     # ==========================================
     # GRÁFICA
@@ -83,29 +85,20 @@ def grafico_interactivo(
         height=500
     )
 
+    # ==========================================
+    # TEXTO
+    # ==========================================
     fig.update_traces(
-    texttemplate="%{text}",
-    textposition="outside"
+        textposition="outside"
     )
 
     # ==========================================
-    # EVENTO CLICK
+    # MOSTRAR
     # ==========================================
-    selected_points = plotly_events(
+    st.plotly_chart(
         fig,
-        click_event=True,
-        hover_event=True
+        use_container_width=True
     )
-
-    ruta_seleccionada = None
-
-    if selected_points:
-
-        ruta_seleccionada = (
-            selected_points[0]["x"]
-        )
-
-    return ruta_seleccionada
 
 # ==========================================
 # SUBIR ARCHIVO
@@ -319,10 +312,8 @@ if archivo:
                 ]
 
         # ==========================================
-        # SUBMENÚ POBLACIÓN
+        # POBLACIÓN
         # ==========================================
-        submenu_poblacion = None
-
         if tipo_analisis == "👥 Población":
 
             submenu_poblacion = st.sidebar.radio(
@@ -332,22 +323,6 @@ if archivo:
                     "🌎 Tierra"
                 ]
             )
-
-        # ==========================================
-        # VISTA PREVIA
-        # ==========================================
-        st.success(
-            f"✅ Archivo procesado correctamente - Hoja {tipo_movimiento}"
-        )
-
-        st.dataframe(
-            df[columnas_visibles].head()
-        )
-
-        # ==========================================
-        # POBLACIÓN
-        # ==========================================
-        if tipo_analisis == "👥 Población":
 
             st.header(
                 f"👥 Análisis de Población - {tipo_movimiento}"
@@ -490,56 +465,23 @@ if archivo:
             )
 
             # ==========================================
-            # RUTA SELECCIONADA
-            # ==========================================
-            ruta_seleccionada = None
-
-            # ==========================================
-            # AIRE
+            # GRÁFICAS
             # ==========================================
             if submenu_poblacion == "✈️ Aire":
 
-                st.header(
-                    f"✈️ Población Aire - {tipo_movimiento}"
-                )
-
-                ruta_seleccionada = grafico_interactivo(
+                grafico_interactivo(
                     promedio_ruta["Promedio_Aire"],
                     "✈️ Promedio Real Pasajeros Aire",
                     etiquetas_personalizadas=promedio_ruta["Promedio_Total"]
                 )
 
-            # ==========================================
-            # TIERRA
-            # ==========================================
             elif submenu_poblacion == "🌎 Tierra":
 
-                st.header(
-                    f"🌎 Población Tierra - {tipo_movimiento}"
-                )
-
-                ruta_seleccionada = grafico_interactivo(
+                grafico_interactivo(
                     promedio_ruta["Promedio_Tierra"],
                     "🌎 Promedio Real Pasajeros Tierra",
                     etiquetas_personalizadas=promedio_ruta["Promedio_Total"]
                 )
-
-            # ==========================================
-            # FILTRAR SEGÚN CLICK
-            # ==========================================
-            if ruta_seleccionada:
-
-                st.success(
-                    f"📍 Ruta seleccionada: {ruta_seleccionada}"
-                )
-
-                promedio_ruta = promedio_ruta[
-                    promedio_ruta.index == ruta_seleccionada
-                ]
-
-                df_despachos = df_despachos[
-                    df_despachos["RUTA"] == ruta_seleccionada
-                ]
 
             # ==========================================
             # KPIs
@@ -596,8 +538,7 @@ if archivo:
 
             grafico_interactivo(
                 promedio_ruta["Promedio_Load_Factor"],
-                "🚌 Saturación Real",
-                sufijo="%"
+                "🚌 Saturación Real"
             )
 
             # ==========================================
@@ -761,7 +702,6 @@ if archivo:
         st.error(
             f"❌ Error general durante el procesamiento: {e}"
         )
-
         # =====================================================================
         # === BOTÓN DE DESCARGA DIRECTA (REEMPLAZA DROPBOX SEGURO EN LA WEB) ===
         # =====================================================================
