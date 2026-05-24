@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
 # ==========================================
 # CONFIGURACIÓN PÁGINA
@@ -422,7 +423,7 @@ if archivo:
                 st.stop()
 
             # ==========================================
-            # CONSOLIDAR
+            # CONSOLIDAR FRECUENCIAS
             # ==========================================
             df_despachos = df_pasajeros.groupby(
                 ["FECHA", "RUTA", col_hora]
@@ -433,16 +434,64 @@ if archivo:
                 Buses_Despachados=("UNIDAD", "nunique")
             ).reset_index()
 
+            # ==========================================
+            # LOAD FACTOR REAL
+            # ==========================================
+            df_despachos["Load_Factor_Real"] = (
+                (
+                    df_despachos["Total_Pasajeros"]
+                    / CAPACIDAD_BUS
+                ) * 100
+            )
+
+            df_despachos["Load_Factor_Real"] = (
+                df_despachos["Load_Factor_Real"]
+                .round(0)
+                .astype(int)
+            )
+
+            # ==========================================
+            # BUSES REQUERIDOS
+            # ==========================================
+            df_despachos["Buses_Requeridos"] = (
+                (
+                    df_despachos["Total_Pasajeros"]
+                    / CAPACIDAD_BUS
+                )
+            ).apply(np.ceil)
+
+            df_despachos["Buses_Requeridos"] = (
+                df_despachos["Buses_Requeridos"]
+                .astype(int)
+            )
+
+            # ==========================================
+            # SATURACIÓN
+            # ==========================================
+            df_despachos["Frecuencia_Saturada"] = (
+                df_despachos["Total_Pasajeros"]
+                > CAPACIDAD_BUS
+            )
+
+            # ==========================================
+            # PROMEDIOS REALES
+            # ==========================================
             promedio_ruta = df_despachos.groupby(
                 "RUTA"
-            )[[
-                "Total_Aire",
-                "Total_Tierra"
-            ]].mean()
+            ).agg(
+                Promedio_Aire=("Total_Aire", "mean"),
+                Promedio_Tierra=("Total_Tierra", "mean"),
+                Promedio_Total=("Total_Pasajeros", "mean"),
+                Maximo_Pasajeros=("Total_Pasajeros", "max"),
+                Promedio_Load_Factor=("Load_Factor_Real", "mean"),
+                Maximo_Load_Factor=("Load_Factor_Real", "max"),
+                Veces_Saturada=("Frecuencia_Saturada", "sum"),
+                Maximo_Buses_Usados=("Buses_Despachados", "max"),
+                Promedio_Buses_Requeridos=("Buses_Requeridos", "mean")
+            ).round(0)
 
             promedio_ruta = (
                 promedio_ruta
-                .round(0)
                 .astype(int)
             )
 
@@ -456,16 +505,20 @@ if archivo:
                 )
 
                 grafico_barras(
-                    promedio_ruta["Total_Aire"],
-                    "✈️ Promedio Pasajeros Aire"
+                    promedio_ruta["Promedio_Aire"],
+                    "✈️ Promedio Real Pasajeros Aire"
                 )
 
-                tabla_aire = promedio_ruta[
-                    ["Total_Aire"]
-                ].copy()
+                tabla_aire = promedio_ruta[[
+                    "Promedio_Aire",
+                    "Maximo_Pasajeros",
+                    "Veces_Saturada"
+                ]].copy()
 
                 tabla_aire.columns = [
-                    "Promedio Aire"
+                    "Promedio Aire",
+                    "Máximo Pasajeros",
+                    "Veces Saturada"
                 ]
 
                 st.dataframe(
@@ -483,16 +536,20 @@ if archivo:
                 )
 
                 grafico_barras(
-                    promedio_ruta["Total_Tierra"],
-                    "🌎 Promedio Pasajeros Tierra"
+                    promedio_ruta["Promedio_Tierra"],
+                    "🌎 Promedio Real Pasajeros Tierra"
                 )
 
-                tabla_tierra = promedio_ruta[
-                    ["Total_Tierra"]
-                ].copy()
+                tabla_tierra = promedio_ruta[[
+                    "Promedio_Tierra",
+                    "Maximo_Pasajeros",
+                    "Veces_Saturada"
+                ]].copy()
 
                 tabla_tierra.columns = [
-                    "Promedio Tierra"
+                    "Promedio Tierra",
+                    "Máximo Pasajeros",
+                    "Veces Saturada"
                 ]
 
                 st.dataframe(
@@ -501,62 +558,93 @@ if archivo:
                 )
 
             # ==========================================
-            # LOAD FACTOR
+            # LOAD FACTOR REAL
             # ==========================================
             st.markdown("---")
 
-            st.header("🚌 Load Factor")
+            st.header("🚌 Load Factor Real de Frecuencia")
 
-            df_despachos["Capacidad_Total"] = (
-                df_despachos["Buses_Despachados"]
-                * CAPACIDAD_BUS
-            )
-
-            df_despachos["Load_Factor"] = (
-                (
-                    df_despachos["Total_Pasajeros"]
-                    / df_despachos["Capacidad_Total"]
-                ) * 100
-            )
-
-            df_despachos["Load_Factor"] = (
-                df_despachos["Load_Factor"]
-                .round(0)
-                .astype(int)
-            )
-
-            load_factor_ruta = df_despachos.groupby(
-                "RUTA"
-            )["Load_Factor"].mean()
-
-            load_factor_ruta = (
-                load_factor_ruta
-                .round(0)
-                .astype(int)
-            )
+            load_factor_ruta = promedio_ruta[
+                "Promedio_Load_Factor"
+            ]
 
             grafico_barras(
                 load_factor_ruta,
-                "🚌 Promedio General Load Factor",
+                "🚌 Saturación Real Promedio",
                 "%"
             )
 
-            tabla_load = (
-                load_factor_ruta.reset_index()
-            )
+            tabla_load = promedio_ruta.reset_index()[[
+                "RUTA",
+                "Promedio_Load_Factor",
+                "Maximo_Load_Factor",
+                "Veces_Saturada",
+                "Maximo_Buses_Usados",
+                "Promedio_Buses_Requeridos"
+            ]]
 
             tabla_load.columns = [
                 "Ruta",
-                "Load Factor"
+                "Promedio Saturación",
+                "Máxima Saturación",
+                "Veces Saturada",
+                "Máx. Buses Utilizados",
+                "Promedio Buses Requeridos"
             ]
 
-            tabla_load["Load Factor"] = (
-                tabla_load["Load Factor"]
+            tabla_load["Promedio Saturación"] = (
+                tabla_load["Promedio Saturación"]
+                .astype(str) + "%"
+            )
+
+            tabla_load["Máxima Saturación"] = (
+                tabla_load["Máxima Saturación"]
                 .astype(str) + "%"
             )
 
             st.dataframe(
                 tabla_load,
+                use_container_width=True
+            )
+
+            # ==========================================
+            # DETALLE OPERATIVO
+            # ==========================================
+            st.markdown("---")
+
+            st.subheader("📋 Detalle Operativo por Frecuencia")
+
+            detalle_operativo = df_despachos[[
+                "FECHA",
+                "RUTA",
+                col_hora,
+                "Total_Aire",
+                "Total_Tierra",
+                "Total_Pasajeros",
+                "Load_Factor_Real",
+                "Buses_Despachados",
+                "Buses_Requeridos"
+            ]].copy()
+
+            detalle_operativo.columns = [
+                "Fecha",
+                "Ruta",
+                "Hora",
+                "Pasajeros Aire",
+                "Pasajeros Tierra",
+                "Pasajeros Totales",
+                "Load Factor Real",
+                "Buses Utilizados",
+                "Buses Requeridos"
+            ]
+
+            detalle_operativo["Load Factor Real"] = (
+                detalle_operativo["Load Factor Real"]
+                .astype(str) + "%"
+            )
+
+            st.dataframe(
+                detalle_operativo,
                 use_container_width=True
             )
 
