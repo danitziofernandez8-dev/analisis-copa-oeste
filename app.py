@@ -8,894 +8,270 @@ import plotly.express as px
 from streamlit_plotly_events import plotly_events
 
 # ==========================================
-# CONFIGURACIÓN PÁGINA
+# CONFIGURACIÓN
 # ==========================================
-st.set_page_config(
-    page_title="Copa Oeste - Análisis",
-    layout="wide"
-)
-
+st.set_page_config(page_title="Copa Oeste - Análisis", layout="wide")
 st.title("🚌 Análisis de Rutas - Copa Oeste")
 
-# ==========================================
-# CONFIGURACIÓN GENERAL
-# ==========================================
 CAPACIDAD_BUS = 22
 
 # ==========================================
-# FUNCIÓN GRÁFICO INTERACTIVO
+# GRÁFICO INTERACTIVO
 # ==========================================
-def grafico_interactivo(
-    datos,
-    titulo,
-    etiquetas_personalizadas=None,
-    color="#7DB7E8"
-):
+def grafico_interactivo(datos, titulo, etiquetas_personalizadas=None, color="#7DB7E8"):
 
     if datos.empty:
-
-        st.warning(
-            f"⚠️ No hay datos para mostrar en: {titulo}"
-        )
-
+        st.warning(f"⚠️ No hay datos en: {titulo}")
         return None
 
-    # ==========================================
-    # DATAFRAME
-    # ==========================================
     df_chart = pd.DataFrame({
         "Ruta": datos.index.astype(str),
         "Valor": datos.values
     })
 
-    # ==========================================
-    # LIMPIAR VALORES
-    # ==========================================
-    df_chart["Valor"] = pd.to_numeric(
-        df_chart["Valor"],
-        errors="coerce"
-    ).fillna(0)
+    df_chart["Valor"] = pd.to_numeric(df_chart["Valor"], errors="coerce").fillna(0)
 
-    # ==========================================
-    # ETIQUETAS
-    # ==========================================
     if etiquetas_personalizadas is not None:
-
-        etiquetas = pd.to_numeric(
-            etiquetas_personalizadas,
-            errors="coerce"
-        ).fillna(0)
-
-        df_chart["Etiqueta"] = (
-            etiquetas
-            .round(0)
-            .astype(int)
-            .astype(str)
-        )
-
+        etiquetas = pd.to_numeric(etiquetas_personalizadas, errors="coerce").fillna(0)
+        df_chart["Etiqueta"] = etiquetas.round(0).astype(int).astype(str)
     else:
+        df_chart["Etiqueta"] = df_chart["Valor"].round(0).astype(int).astype(str)
 
-        df_chart["Etiqueta"] = (
-            df_chart["Valor"]
-            .round(0)
-            .astype(int)
-            .astype(str)
-        )
+    df_chart = df_chart.sort_values("Valor", ascending=False)
 
-    # ==========================================
-    # ELIMINAR NULOS
-    # ==========================================
-    df_chart = df_chart.dropna(
-        subset=["Ruta", "Valor"]
-    )
+    fig = px.bar(df_chart, x="Ruta", y="Valor", text="Etiqueta", title=titulo)
 
-    # ==========================================
-    # ORDENAR
-    # ==========================================
-    df_chart = df_chart.sort_values(
-        by="Valor",
-        ascending=False
-    )
-
-    # ==========================================
-    # GRÁFICA
-    # ==========================================
-    fig = px.bar(
-        df_chart,
-        x="Ruta",
-        y="Valor",
-        text="Etiqueta",
-        title=titulo
-    )
-
-    # ==========================================
-    # ESTILO
-    # ==========================================
     fig.update_traces(
         marker_color=color,
         textposition="outside",
-        textfont_size=15,
         textfont_color="white",
-        hovertemplate=
-        "<b>Ruta:</b> %{x}<br>" +
-        "<b>Valor:</b> %{y}<br>" +
-        "<b>Promedio General:</b> %{text}<extra></extra>"
+        hovertemplate="<b>Ruta:</b> %{x}<br><b>Valor:</b> %{y}<extra></extra>"
     )
 
     fig.update_layout(
         plot_bgcolor="#08142c",
         paper_bgcolor="#08142c",
         font_color="white",
-        title_font_size=22,
-        title_x=0.15,
-        showlegend=False,
-        height=550,
-        xaxis_title="",
-        yaxis_title="",
-        margin=dict(
-            t=90,
-            l=20,
-            r=20,
-            b=20
-        )
+        height=550
     )
 
-    fig.update_xaxes(
-        showgrid=False
-    )
+    sel = plotly_events(fig, click_event=True, key=titulo)
 
-    fig.update_yaxes(
-        showgrid=True,
-        gridcolor="rgba(255,255,255,0.08)"
-    )
+    return sel[0]["x"] if sel else None
 
-    # ==========================================
-    # EVENTOS
-    # ==========================================
-    selected_points = plotly_events(
-        fig,
-        click_event=True,
-        hover_event=False,
-        select_event=False,
-        override_height=550,
-        key=titulo
-    )
-
-    ruta_seleccionada = None
-
-    if selected_points:
-
-        ruta_seleccionada = (
-            selected_points[0]["x"]
-        )
-
-    return ruta_seleccionada
 
 # ==========================================
-# SUBIR ARCHIVO
+# UPLOAD
 # ==========================================
-archivo = st.file_uploader(
-    "📂 Sube el Excel de Rutas",
-    type=["xlsx"]
-)
+archivo = st.file_uploader("📂 Sube Excel", type=["xlsx"])
 
-# ==========================================
-# INICIO
-# ==========================================
 if archivo:
 
     try:
 
         # ==========================================
-        # SIDEBAR
+        # CONFIG
         # ==========================================
         st.sidebar.header("⚙️ Configuración")
 
-        tipo_movimiento = st.sidebar.radio(
-            "🚌 Tipo de Movimiento",
-            [
-                "ENTRADA",
-                "SALIDA"
-            ]
-        )
-
-        tipo_analisis = st.sidebar.radio(
-            "📌 Tipo de Análisis",
-            [
-                "👥 Población",
-                "⏱️ Tiempos"
-            ]
-        )
+        tipo_movimiento = st.sidebar.radio("Movimiento", ["ENTRADA", "SALIDA"])
+        tipo_analisis = st.sidebar.radio("Análisis", ["👥 Población", "⏱️ Tiempos"])
 
         # ==========================================
-        # LEER EXCEL
+        # EXCEL
         # ==========================================
-        excel_file = pd.ExcelFile(archivo)
+        excel = pd.ExcelFile(archivo)
 
-        hoja_real = None
-
-        for hoja in excel_file.sheet_names:
-
-            if hoja.strip().upper() == tipo_movimiento:
-
-                hoja_real = hoja
+        hoja = None
+        for h in excel.sheet_names:
+            if h.strip().upper() == tipo_movimiento:
+                hoja = h
                 break
 
-        if hoja_real is None:
-
-            st.error(
-                f"❌ No existe la pestaña {tipo_movimiento}"
-            )
-
+        if hoja is None:
+            st.error("❌ No existe hoja")
             st.stop()
 
-        # ==========================================
-        # LEER RAW
-        # ==========================================
-        df_raw = pd.read_excel(
-            archivo,
-            sheet_name=hoja_real,
-            header=None
-        )
+        df_raw = pd.read_excel(archivo, sheet_name=hoja, header=None)
 
         # ==========================================
-        # BUSCAR ENCABEZADO
+        # ENCABEZADO
         # ==========================================
-        fila_encabezado = None
-
-        palabras_clave = [
-            "FECHA",
-            "RUTA",
-            "UNIDAD"
-        ]
-
-        for idx, row in df_raw.iterrows():
-
-            valores = [
-                str(v).strip().upper()
-                for v in row.values
-            ]
-
-            if any(pc in valores for pc in palabras_clave):
-
-                fila_encabezado = idx
+        fila_enc = None
+        for i, row in df_raw.iterrows():
+            vals = [str(x).upper() for x in row.values]
+            if any(k in vals for k in ["FECHA","RUTA","UNIDAD"]):
+                fila_enc = i
                 break
 
-        if fila_encabezado is None:
+        columnas = df_raw.iloc[fila_enc].values
 
-            st.error(
-                "❌ No se detectó encabezado"
-            )
+        cols = []
+        contador = {}
 
-            st.stop()
+        for i, c in enumerate(columnas):
 
-        # ==========================================
-        # LIMPIAR COLUMNAS
-        # ==========================================
-        columnas_reales = (
-            df_raw.iloc[fila_encabezado].values
-        )
+            c = str(c).strip().upper()
 
-        columnas_limpias = []
-        contador_columnas = {}
-
-        for i, col in enumerate(columnas_reales):
-
-            col_str = str(col).strip()
-
-            if (
-                pd.isna(col)
-                or col_str == ""
-                or col_str.lower() in ["nan", "none"]
-                or col_str.startswith("Unnamed")
-            ):
-
-                nombre_final = f"VACIO_{i}"
-
+            if c in ["", "NAN", "NONE", "UNNAMED"]:
+                name = f"VACIO_{i}"
             else:
+                contador[c] = contador.get(c, 0) + 1
+                name = c if contador[c] == 1 else f"{c}_{contador[c]}"
 
-                nombre_base = col_str
+            cols.append(name)
 
-                if nombre_base in contador_columnas:
+        df = df_raw.iloc[fila_enc+1:].copy()
+        df.columns = cols
+        df = df.dropna(how="all")
 
-                    contador_columnas[nombre_base] += 1
+        df["RUTA"] = df["RUTA"].astype(str).str.upper().str.strip()
 
-                    nombre_final = (
-                        f"{nombre_base}_{contador_columnas[nombre_base]}"
-                    )
-
-                else:
-
-                    contador_columnas[nombre_base] = 1
-                    nombre_final = nombre_base
-
-            columnas_limpias.append(nombre_final)
-
-        # ==========================================
-        # DATAFRAME
-        # ==========================================
-        df = df_raw.iloc[
-            fila_encabezado + 1:
-        ].copy()
-
-        df.columns = columnas_limpias
-
-        df = (
-            df.dropna(how="all")
-            .reset_index(drop=True)
-        )
-
-        # ==========================================
-        # LIMPIAR RUTAS
-        # ==========================================
-        if "RUTA" in df.columns:
-
-            df["RUTA"] = (
-                df["RUTA"]
-                .astype(str)
-                .str.strip()
-                .str.upper()
-            )
-
-        columnas_visibles = [
-            c for c in df.columns
-            if not str(c).startswith("VACIO_")
-        ]
+        visibles = [c for c in df.columns if not c.startswith("VACIO_")]
 
         # ==========================================
         # FECHA
         # ==========================================
         if "FECHA" in df.columns:
-
-            df["FECHA_PROCESADA"] = pd.to_datetime(
-                df["FECHA"],
-                errors="coerce"
-            )
+            df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce")
 
         # ==========================================
         # FILTRO MES
         # ==========================================
-        st.sidebar.header("📅 Filtros")
+        if "FECHA" in df.columns:
 
-        if (
-            "FECHA_PROCESADA" in df.columns
-            and not df["FECHA_PROCESADA"].dropna().empty
-        ):
+            meses = {1:"Ene",2:"Feb",3:"Mar",4:"Abr",5:"May",6:"Jun",
+                     7:"Jul",8:"Ago",9:"Sep",10:"Oct",11:"Nov",12:"Dic"}
 
-            meses_es = {
-                1: "Enero",
-                2: "Febrero",
-                3: "Marzo",
-                4: "Abril",
-                5: "Mayo",
-                6: "Junio",
-                7: "Julio",
-                8: "Agosto",
-                9: "Septiembre",
-                10: "Octubre",
-                11: "Noviembre",
-                12: "Diciembre"
-            }
+            df["PERIODO"] = df["FECHA"].dt.year.astype(str) + "-" + df["FECHA"].dt.month.map(meses)
 
-            df["PERIODO"] = (
-                df["FECHA_PROCESADA"]
-                .dt.year.astype(str)
-                + " - "
-                + df["FECHA_PROCESADA"]
-                .dt.month.map(meses_es)
-            )
+            mes = st.sidebar.selectbox("Mes", ["Todos"] + sorted(df["PERIODO"].dropna().unique()))
 
-            lista_periodos = sorted(
-                df["PERIODO"]
-                .dropna()
-                .unique()
-            )
+            if mes != "Todos":
+                df = df[df["PERIODO"] == mes]
 
-            periodo = st.sidebar.selectbox(
-                "Selecciona Mes:",
-                ["Todos"] + lista_periodos
-            )
-
-            if periodo != "Todos":
-
-                df = df[
-                    df["PERIODO"] == periodo
-                ]
-
-        # ==========================================
-        # VISTA PREVIA
-        # ==========================================
-        st.success(
-            f"✅ Archivo procesado correctamente - Hoja {tipo_movimiento}"
-        )
-
-        st.dataframe(
-            df[columnas_visibles].head(),
-            use_container_width=True
-        )
+        st.success("Archivo listo")
+        st.dataframe(df[visibles].head())
 
         # ==========================================
         # POBLACIÓN
         # ==========================================
         if tipo_analisis == "👥 Población":
 
-            submenu_poblacion = st.sidebar.radio(
-                "👥 Tipo de Población",
-                [
-                    "✈️ Aire",
-                    "🌎 Tierra"
-                ]
-            )
+            st.header("👥 Análisis de Población")
 
-            st.header(
-                f"👥 Análisis de Población - {tipo_movimiento}"
-            )
+            cols_aire = [c for c in visibles if "AIRE" in c]
+            cols_tierra = [c for c in visibles if "TIERRA" in c]
 
-            # ==========================================
-            # COLUMNAS
-            # ==========================================
-            cols_aire = [
-                c for c in columnas_visibles
-                if "AIRE" in c.upper()
-            ]
+            d = df.copy()
 
-            cols_tierra = [
-                c for c in columnas_visibles
-                if "TIERRA" in c.upper()
-            ]
-
-            # ==========================================
-            # COPIA
-            # ==========================================
-            df_pasajeros = df.copy()
-
-            # ==========================================
-            # NUMÉRICOS
-            # ==========================================
-            for col in cols_aire + cols_tierra:
-
-                df_pasajeros[col] = pd.to_numeric(
-                    df_pasajeros[col],
-                    errors="coerce"
-                ).fillna(0)
+            for c in cols_aire + cols_tierra:
+                d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0)
 
             # ==========================================
             # TOTALES
             # ==========================================
-            df_pasajeros["Total_Aire"] = (
-                df_pasajeros[cols_aire]
-                .sum(axis=1)
-            )
+            d["Aire"] = d[cols_aire].sum(axis=1)
+            d["Tierra"] = d[cols_tierra].sum(axis=1)
 
-            df_pasajeros["Total_Tierra"] = (
-                df_pasajeros[cols_tierra]
-                .sum(axis=1)
-            )
+            # ⭐ GENERAL NUEVO
+            d["General"] = d["Aire"] + d["Tierra"]
 
-            df_pasajeros["Total_Pasajeros"] = (
-                df_pasajeros["Total_Aire"]
-                + df_pasajeros["Total_Tierra"]
-            )
+            col_hora = next((c for c in ["H. PARTIDA","HORA SALIDA","HORA LLEGADA"] if c in d.columns), None)
 
-            # ==========================================
-            # DETECTAR HORA
-            # ==========================================
-            posibles_horas = [
-                "H. PARTIDA",
-                "HORA LLEGADA",
-                "HORA SALIDA"
-            ]
-
-            col_hora = None
-
-            for col in posibles_horas:
-
-                if col in df_pasajeros.columns:
-
-                    col_hora = col
-                    break
-
-            if col_hora is None:
-
-                st.error(
-                    "❌ No se encontró columna de hora"
-                )
-
+            if not col_hora:
+                st.error("Sin hora")
                 st.stop()
 
-            # ==========================================
-            # CONSOLIDAR
-            # ==========================================
-            df_despachos = df_pasajeros.groupby(
-                ["FECHA", "RUTA", col_hora]
-            ).agg(
-                Total_Aire=("Total_Aire", "sum"),
-                Total_Tierra=("Total_Tierra", "sum"),
-                Total_Pasajeros=("Total_Pasajeros", "sum"),
-                Buses_Despachados=("UNIDAD", "nunique")
+            df_d = d.groupby(["FECHA","RUTA",col_hora]).agg(
+                Aire=("Aire","sum"),
+                Tierra=("Tierra","sum"),
+                General=("General","sum"),
+                Buses=("UNIDAD","nunique")
             ).reset_index()
 
+            df_d["Capacidad"] = df_d["Buses"] * CAPACIDAD_BUS
+
+            df_d["Load_Factor"] = df_d["General"] / df_d["Capacidad"] * 100
+
+            df_d["Req_Buses"] = np.ceil(df_d["General"] / CAPACIDAD_BUS)
+
+            df_d["Saturado"] = df_d["General"] > df_d["Capacidad"]
+
             # ==========================================
-            # CAPACIDAD OPERATIVA REAL
+            # AGRUPACIÓN POR RUTA (SIN SESGO)
             # ==========================================
-            df_despachos["Capacidad_Operativa"] = (
-                df_despachos["Buses_Despachados"]
-                * CAPACIDAD_BUS
+            ruta = df_d.groupby("RUTA").agg(
+                Total_Aire=("Aire","sum"),
+                Total_Tierra=("Tierra","sum"),
+                Total_General=("General","sum"),
+                Eventos=("General","count"),
+                Max_Buses=("Buses","max"),
+                Saturaciones=("Saturado","sum")
             )
 
-            # ==========================================
-            # LOAD FACTOR REAL
-            # ==========================================
-            df_despachos["Load_Factor_Real"] = (
-                (
-                    df_despachos["Total_Pasajeros"]
-                    / df_despachos["Capacidad_Operativa"]
-                ) * 100
-            )
+            ruta["Promedio_Aire"] = ruta["Total_Aire"] / ruta["Eventos"]
+            ruta["Promedio_Tierra"] = ruta["Total_Tierra"] / ruta["Eventos"]
+            ruta["Promedio_General"] = ruta["Total_General"] / ruta["Eventos"]
+
+            ruta["Load_Factor"] = ruta["Total_General"] / (ruta["Eventos"] * CAPACIDAD_BUS) * 100
 
             # ==========================================
-            # BUSES REQUERIDOS
+            # SELECCIÓN GRÁFICA
             # ==========================================
-            df_despachos["Buses_Requeridos"] = (
-                (
-                    df_despachos["Total_Pasajeros"]
-                    / CAPACIDAD_BUS
-                )
-            ).apply(np.ceil)
+            st.subheader("📊 Aire")
+            grafico_interactivo(ruta["Promedio_Aire"], "Aire", color="#63B3ED")
 
-            # ==========================================
-            # SOBREPOBLACIÓN REAL
-            # ==========================================
-            df_despachos["Frecuencia_Saturada"] = (
-                df_despachos["Total_Pasajeros"]
-                > df_despachos["Capacidad_Operativa"]
-            )
+            st.subheader("📊 Tierra")
+            grafico_interactivo(ruta["Promedio_Tierra"], "Tierra", color="#68D391")
+
+            st.subheader("📊 General")
+            grafico_interactivo(ruta["Promedio_General"], "General", color="#F6AD55")
 
             # ==========================================
-            # PROMEDIOS
-            # ==========================================
-            promedio_ruta = df_despachos.groupby(
-                "RUTA"
-            ).agg(
-                Promedio_Aire=("Total_Aire", "mean"),
-                Promedio_Tierra=("Total_Tierra", "mean"),
-                Promedio_Total=("Total_Pasajeros", "mean"),
-                Load_Factor=("Load_Factor_Real", "mean"),
-                Maximo_Buses_Usados=("Buses_Despachados", "max"),
-                Veces_Saturada=("Frecuencia_Saturada", "sum")
-            ).round(1)
-
-            # ==========================================
-            # LIMPIAR
-            # ==========================================
-            promedio_ruta = promedio_ruta[
-                promedio_ruta.index.notna()
-            ]
-
-            promedio_ruta = promedio_ruta[
-                promedio_ruta.index != ""
-            ]
-
-            # ==========================================
-            # FILTRAR CEROS
-            # ==========================================
-            if submenu_poblacion == "✈️ Aire":
-
-                promedio_ruta = promedio_ruta[
-                    promedio_ruta["Promedio_Aire"] > 0
-                ]
-
-            else:
-
-                promedio_ruta = promedio_ruta[
-                    promedio_ruta["Promedio_Tierra"] > 0
-                ]
-
-            # ==========================================
-            # RUTA SELECCIONADA
-            # ==========================================
-            ruta_seleccionada = None
-
-            # ==========================================
-            # GRAFICA AIRE
-            # ==========================================
-            if submenu_poblacion == "✈️ Aire":
-
-                st.subheader(
-                    "✈️ Promedio de población del personal de Aire por ruta"
-                )
-
-                ruta_seleccionada = grafico_interactivo(
-                    promedio_ruta["Promedio_Aire"],
-                    "✈️ Promedio Aire",
-                    etiquetas_personalizadas=
-                    promedio_ruta["Promedio_Total"],
-                    color="#63B3ED"
-                )
-
-            # ==========================================
-            # GRAFICA TIERRA
-            # ==========================================
-            elif submenu_poblacion == "🌎 Tierra":
-
-                st.subheader(
-                    "🌎 Promedio de población del personal de Tierra por ruta"
-                )
-
-                ruta_seleccionada = grafico_interactivo(
-                    promedio_ruta["Promedio_Tierra"],
-                    "🌎 Promedio Tierra",
-                    etiquetas_personalizadas=
-                    promedio_ruta["Promedio_Total"],
-                    color="#68D391"
-                )
-
-            # ==========================================
-            # FILTRO DINÁMICO
-            # ==========================================
-            if ruta_seleccionada:
-
-                st.success(
-                    f"📍 Ruta seleccionada: {ruta_seleccionada}"
-                )
-
-                promedio_ruta = promedio_ruta[
-                    promedio_ruta.index == ruta_seleccionada
-                ]
-
-                df_despachos = df_despachos[
-                    df_despachos["RUTA"] == ruta_seleccionada
-                ]
-
-            # ==========================================
-            # KPIs
+            # KPIs (USAN GENERAL)
             # ==========================================
             st.markdown("---")
+            c1,c2,c3,c4 = st.columns(4)
 
-            col1, col2, col3, col4 = st.columns(4)
+            c1.metric("Promedio General", round(df_d["General"].mean(),1))
+            c2.metric("Load Factor", f"{round(ruta['Load_Factor'].mean(),1)}%")
+            c3.metric("Max Buses", int(ruta["Max_Buses"].max()))
+            c4.metric("Saturaciones", int(ruta["Saturaciones"].sum()))
 
-            col1.metric(
-                "👥 Promedio General",
-                round(
-                    promedio_ruta["Promedio_Total"]
-                    .mean(),
-                    1
-                )
-            )
-
-            col2.metric(
-                "🚌 LOAD FACTOR",
-                str(
-                    round(
-                        promedio_ruta["Load_Factor"]
-                        .mean(),
-                        1
-                    )
-                ) + "%"
-            )
-
-            col3.metric(
-                "🚌 Máx. Buses Utilizados",
-                int(
-                    promedio_ruta[
-                        "Maximo_Buses_Usados"
-                    ].max()
-                )
-            )
-
-            col4.metric(
-                "⚠️ Cant. veces con sobrepoblación",
-                int(
-                    promedio_ruta[
-                        "Veces_Saturada"
-                    ].sum()
-                )
-            )
-
-            # ==========================================
-            # LOAD FACTOR
-            # ==========================================
-            st.markdown("---")
-
-            st.subheader(
-                "🚌 Load Factor Promedio por Ruta"
-            )
-
-            grafico_interactivo(
-                promedio_ruta["Load_Factor"],
-                "🚌 Load Factor (%)",
-                color="#F6AD55"
-            )
-
-            # ==========================================
-            # TABLA RESUMEN
-            # ==========================================
-            st.markdown("---")
-
-            st.subheader(
-                "📊 Resumen General"
-            )
-
-            resumen = promedio_ruta.reset_index()
-
-            resumen.columns = [
-                "Ruta",
-                "Promedio Aire",
-                "Promedio Tierra",
-                "Promedio Total",
-                "Load Factor",
-                "Máx. Buses Utilizados",
-                "Cant. Sobrepoblación"
-            ]
-
-            resumen["Load Factor"] = (
-                resumen["Load Factor"]
-                .round(1)
-                .astype(str) + "%"
-            )
-
-            st.dataframe(
-                resumen,
-                use_container_width=True
-            )
-
-            # ==========================================
-            # DETALLE OPERATIVO
-            # ==========================================
-            st.markdown("---")
-
-            st.subheader(
-                "📋 Detalle Operativo"
-            )
-
-            detalle_operativo = df_despachos[[
-
-                "FECHA",
-                "RUTA",
-                col_hora,
-                "Total_Aire",
-                "Total_Tierra",
-                "Total_Pasajeros",
-                "Load_Factor_Real",
-                "Buses_Despachados",
-                "Buses_Requeridos",
-                "Capacidad_Operativa"
-
-            ]].copy()
-
-            detalle_operativo.columns = [
-
-                "Fecha",
-                "Ruta",
-                "Hora",
-                "Pasajeros Aire",
-                "Pasajeros Tierra",
-                "Pasajeros Totales",
-                "Load Factor Real",
-                "Buses Utilizados",
-                "Buses Requeridos",
-                "Capacidad Operativa"
-
-            ]
-
-            detalle_operativo["Load Factor Real"] = (
-                detalle_operativo["Load Factor Real"]
-                .round(1)
-                .astype(str) + "%"
-            )
-
-            st.dataframe(
-                detalle_operativo,
-                use_container_width=True
-            )
+            st.dataframe(ruta.reset_index())
 
         # ==========================================
         # TIEMPOS
         # ==========================================
         if tipo_analisis == "⏱️ Tiempos":
 
-            st.header(
-                f"⏱️ Análisis de Tiempos - {tipo_movimiento}"
-            )
+            st.header("⏱️ Tiempos")
 
-            col_programada = None
+            p = next((c for c in ["H. PARTIDA","HORA SALIDA"] if c in df.columns), None)
+            r = next((c for c in ["H. T1","H. T2","CONECTOR"] if c in df.columns), None)
 
-            posibles_programadas = [
-                "HORA LLEGADA",
-                "HORA SALIDA",
-                "H. PARTIDA"
-            ]
+            if p and r:
 
-            for col in posibles_programadas:
+                dt = df.copy()
+                dt["P"] = pd.to_datetime(dt[p], errors="coerce")
+                dt["R"] = pd.to_datetime(dt[r], errors="coerce")
 
-                if col in df.columns:
+                dt = dt.dropna(subset=["P","R"])
 
-                    col_programada = col
-                    break
+                dt["Delay"] = (dt["R"] - dt["P"]).dt.total_seconds()/60
 
-            col_real = None
+                tarde = dt.groupby("RUTA")["Delay"].apply(lambda x: (x>0).sum())
 
-            posibles_reales = [
-                "CONECTOR",
-                "H. T1",
-                "H. T2",
-                "H. TC"
-            ]
+                grafico_interactivo(tarde, "Veces tarde", color="#FC8181")
 
-            for col in posibles_reales:
-
-                if col in df.columns:
-
-                    col_real = col
-                    break
-
-            if (
-                col_programada is not None
-                and col_real is not None
-            ):
-
-                df_tiempos = df.copy()
-
-                df_tiempos["Hora_Programada"] = pd.to_datetime(
-                    df_tiempos[col_programada],
-                    errors="coerce"
-                )
-
-                df_tiempos["Hora_Real"] = pd.to_datetime(
-                    df_tiempos[col_real],
-                    errors="coerce"
-                )
-
-                df_tiempos = df_tiempos.dropna(
-                    subset=[
-                        "Hora_Programada",
-                        "Hora_Real"
-                    ]
-                )
-
-                df_tiempos["Diferencia_Min"] = (
-                    df_tiempos["Hora_Real"]
-                    - df_tiempos["Hora_Programada"]
-                ).dt.total_seconds() / 60
-
-                df_tiempos["Llego_Tarde"] = (
-                    df_tiempos["Diferencia_Min"] > 0
-                )
-
-                veces_tarde = df_tiempos.groupby(
-                    "RUTA"
-                )["Llego_Tarde"].sum()
-
-                veces_tarde = (
-                    veces_tarde
-                    .round(0)
-                    .astype(int)
-                )
-
-                st.markdown("---")
-
-                grafico_interactivo(
-                    veces_tarde,
-                    "🚨 Cantidad de Veces Tarde",
-                    color="#FC8181"
-                )
-
-                st.dataframe(
-                    veces_tarde.reset_index(),
-                    use_container_width=True
-                )
+                st.dataframe(tarde.reset_index())
 
             else:
-
-                st.error(
-                    "❌ No existen columnas válidas para análisis de tiempos"
-                )
+                st.error("Sin columnas de tiempo")
 
     except Exception as e:
-
-        st.error(
-            f"❌ Error general durante el procesamiento: {e}"
-        )
+        st.error(f"Error: {e}")
         # =====================================================================
         # === BOTÓN DE DESCARGA DIRECTA (REEMPLAZA DROPBOX SEGURO EN LA WEB) ===
         # =====================================================================
