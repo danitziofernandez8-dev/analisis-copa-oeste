@@ -84,8 +84,8 @@ def grafico_interactivo(
     )
 
     fig.update_traces(
-        texttemplate="%{text}" + sufijo,
-        textposition="outside"
+    texttemplate="%{text}",
+    textposition="outside"
     )
 
     # ==========================================
