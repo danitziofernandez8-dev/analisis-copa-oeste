@@ -48,6 +48,14 @@ def grafico_interactivo(
     })
 
     # ==========================================
+    # LIMPIAR VALORES
+    # ==========================================
+    df_chart["Valor"] = pd.to_numeric(
+        df_chart["Valor"],
+        errors="coerce"
+    ).fillna(0)
+
+    # ==========================================
     # ETIQUETAS
     # ==========================================
     if etiquetas_personalizadas is not None:
@@ -65,14 +73,17 @@ def grafico_interactivo(
     else:
 
         df_chart["Etiqueta"] = (
-            pd.to_numeric(
-                datos,
-                errors="coerce"
-            )
-            .fillna(0)
+            df_chart["Valor"]
             .astype(int)
             .astype(str)
         )
+
+    # ==========================================
+    # ELIMINAR NULOS
+    # ==========================================
+    df_chart = df_chart.dropna(
+        subset=["Ruta", "Valor"]
+    )
 
     # ==========================================
     # GRÁFICA
@@ -301,6 +312,18 @@ if archivo:
             .reset_index(drop=True)
         )
 
+        # ==========================================
+        # LIMPIAR RUTAS
+        # ==========================================
+        if "RUTA" in df.columns:
+
+            df["RUTA"] = (
+                df["RUTA"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
         columnas_visibles = [
             c for c in df.columns
             if not str(c).startswith("VACIO_")
@@ -518,24 +541,40 @@ if archivo:
             )
 
             # ==========================================
-            # GRÁFICAS
+            # RUTA SELECCIONADA
             # ==========================================
             ruta_seleccionada = None
 
+            # ==========================================
+            # AIRE
+            # ==========================================
             if submenu_poblacion == "✈️ Aire":
+
+                st.header(
+                    f"✈️ Población Aire - {tipo_movimiento}"
+                )
 
                 ruta_seleccionada = grafico_interactivo(
                     promedio_ruta["Promedio_Aire"],
-                    "✈️ Promedio Real Pasajeros Aire",
-                    etiquetas_personalizadas=promedio_ruta["Promedio_Total"]
+                    "✈️ Promedio Pasajeros Aire",
+                    etiquetas_personalizadas=
+                    promedio_ruta["Promedio_Total"]
                 )
 
+            # ==========================================
+            # TIERRA
+            # ==========================================
             elif submenu_poblacion == "🌎 Tierra":
+
+                st.header(
+                    f"🌎 Población Tierra - {tipo_movimiento}"
+                )
 
                 ruta_seleccionada = grafico_interactivo(
                     promedio_ruta["Promedio_Tierra"],
-                    "🌎 Promedio Real Pasajeros Tierra",
-                    etiquetas_personalizadas=promedio_ruta["Promedio_Total"]
+                    "🌎 Promedio Pasajeros Tierra",
+                    etiquetas_personalizadas=
+                    promedio_ruta["Promedio_Total"]
                 )
 
             # ==========================================
@@ -556,28 +595,14 @@ if archivo:
                 ]
 
             # ==========================================
-            # PROMEDIO GENERAL
-            # ==========================================
-            st.markdown("---")
-
-            promedio_general_real = int(
-                df_despachos["Total_Pasajeros"].mean()
-            )
-
-            st.metric(
-                "👥 Promedio General Real (Aire + Tierra)",
-                promedio_general_real
-            )
-
-            # ==========================================
-            # KPIs
+            # KPI PRINCIPALES
             # ==========================================
             st.markdown("---")
 
             col1, col2, col3, col4 = st.columns(4)
 
             col1.metric(
-                "👥 Promedio Total Ruta",
+                "👥 Promedio General Real",
                 int(
                     promedio_ruta["Promedio_Total"]
                     .mean()
@@ -585,7 +610,7 @@ if archivo:
             )
 
             col2.metric(
-                "🚨 Load Factor",
+                "🚌 LOAD FACTOR",
                 str(
                     int(
                         promedio_ruta[
@@ -624,15 +649,17 @@ if archivo:
 
             grafico_interactivo(
                 promedio_ruta["Promedio_Load_Factor"],
-                "🚌 Saturación Real",
-                etiquetas_personalizadas=
-                promedio_ruta["Promedio_Load_Factor"]
+                "🚌 Saturación Real (%)"
             )
 
             # ==========================================
-            # TABLA
+            # TABLA RESUMEN
             # ==========================================
             st.markdown("---")
+
+            st.subheader(
+                "📊 Resumen General"
+            )
 
             tabla_load = promedio_ruta.reset_index()
 
@@ -683,6 +710,107 @@ if archivo:
                 detalle_operativo,
                 use_container_width=True
             )
+
+        # ==========================================
+        # TIEMPOS
+        # ==========================================
+        if tipo_analisis == "⏱️ Tiempos":
+
+            st.header(
+                f"⏱️ Análisis de Tiempos - {tipo_movimiento}"
+            )
+
+            col_programada = None
+
+            posibles_programadas = [
+                "HORA LLEGADA",
+                "HORA SALIDA",
+                "H. PARTIDA"
+            ]
+
+            for col in posibles_programadas:
+
+                if col in df.columns:
+
+                    col_programada = col
+                    break
+
+            col_real = None
+
+            posibles_reales = [
+                "CONECTOR",
+                "H. T1",
+                "H. T2",
+                "H. TC"
+            ]
+
+            for col in posibles_reales:
+
+                if col in df.columns:
+
+                    col_real = col
+                    break
+
+            if (
+                col_programada is not None
+                and col_real is not None
+            ):
+
+                df_tiempos = df.copy()
+
+                df_tiempos["Hora_Programada"] = pd.to_datetime(
+                    df_tiempos[col_programada],
+                    errors="coerce"
+                )
+
+                df_tiempos["Hora_Real"] = pd.to_datetime(
+                    df_tiempos[col_real],
+                    errors="coerce"
+                )
+
+                df_tiempos = df_tiempos.dropna(
+                    subset=[
+                        "Hora_Programada",
+                        "Hora_Real"
+                    ]
+                )
+
+                df_tiempos["Diferencia_Min"] = (
+                    df_tiempos["Hora_Real"]
+                    - df_tiempos["Hora_Programada"]
+                ).dt.total_seconds() / 60
+
+                df_tiempos["Llego_Tarde"] = (
+                    df_tiempos["Diferencia_Min"] > 0
+                )
+
+                veces_tarde = df_tiempos.groupby(
+                    "RUTA"
+                )["Llego_Tarde"].sum()
+
+                veces_tarde = (
+                    veces_tarde
+                    .round(0)
+                    .astype(int)
+                )
+
+                st.markdown("---")
+
+                grafico_interactivo(
+                    veces_tarde,
+                    "🚨 Cantidad de Veces Tarde"
+                )
+
+                st.dataframe(
+                    veces_tarde.reset_index(),
+                    use_container_width=True
+                )
+
+            else:
+
+                st.error(
+                    "❌ No existen columnas válidas para análisis de tiempos"
+                )
 
     except Exception as e:
 
