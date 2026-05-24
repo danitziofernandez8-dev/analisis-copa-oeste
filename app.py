@@ -1,3 +1,6 @@
+# ==========================================
+# IMPORTACIONES
+# ==========================================
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -553,6 +556,20 @@ if archivo:
                 ]
 
             # ==========================================
+            # PROMEDIO GENERAL
+            # ==========================================
+            st.markdown("---")
+
+            promedio_general_real = int(
+                df_despachos["Total_Pasajeros"].mean()
+            )
+
+            st.metric(
+                "👥 Promedio General Real (Aire + Tierra)",
+                promedio_general_real
+            )
+
+            # ==========================================
             # KPIs
             # ==========================================
             st.markdown("---")
@@ -560,7 +577,7 @@ if archivo:
             col1, col2, col3, col4 = st.columns(4)
 
             col1.metric(
-                "👥 Promedio Total Real",
+                "👥 Promedio Total Ruta",
                 int(
                     promedio_ruta["Promedio_Total"]
                     .mean()
@@ -568,7 +585,7 @@ if archivo:
             )
 
             col2.metric(
-                "🚨 Máxima Saturación",
+                "🚨 Load Factor",
                 str(
                     int(
                         promedio_ruta[
@@ -588,7 +605,7 @@ if archivo:
             )
 
             col4.metric(
-                "⚠️ Veces Saturada",
+                "⚠️ Cant. veces con sobrepoblación",
                 int(
                     promedio_ruta[
                         "Veces_Saturada"
@@ -666,109 +683,6 @@ if archivo:
                 detalle_operativo,
                 use_container_width=True
             )
-
-        # ==========================================
-        # TIEMPOS
-        # ==========================================
-        if tipo_analisis == "⏱️ Tiempos":
-
-            st.header(
-                f"⏱️ Análisis de Tiempos - {tipo_movimiento}"
-            )
-
-            col_programada = None
-
-            posibles_programadas = [
-                "HORA LLEGADA",
-                "HORA SALIDA",
-                "H. PARTIDA"
-            ]
-
-            for col in posibles_programadas:
-
-                if col in df.columns:
-
-                    col_programada = col
-                    break
-
-            col_real = None
-
-            posibles_reales = [
-                "CONECTOR",
-                "H. T1",
-                "H. T2",
-                "H. TC"
-            ]
-
-            for col in posibles_reales:
-
-                if col in df.columns:
-
-                    col_real = col
-                    break
-
-            if (
-                col_programada is not None
-                and col_real is not None
-            ):
-
-                df_tiempos = df.copy()
-
-                df_tiempos["Hora_Programada"] = pd.to_datetime(
-                    df_tiempos[col_programada],
-                    errors="coerce"
-                )
-
-                df_tiempos["Hora_Real"] = pd.to_datetime(
-                    df_tiempos[col_real],
-                    errors="coerce"
-                )
-
-                df_tiempos = df_tiempos.dropna(
-                    subset=[
-                        "Hora_Programada",
-                        "Hora_Real"
-                    ]
-                )
-
-                df_tiempos["Diferencia_Min"] = (
-                    df_tiempos["Hora_Real"]
-                    - df_tiempos["Hora_Programada"]
-                ).dt.total_seconds() / 60
-
-                df_tiempos["Llego_Tarde"] = (
-                    df_tiempos["Diferencia_Min"] > 0
-                )
-
-                veces_tarde = df_tiempos.groupby(
-                    "RUTA"
-                )["Llego_Tarde"].sum()
-
-                veces_tarde = (
-                    veces_tarde
-                    .round(0)
-                    .astype(int)
-                )
-
-                st.markdown("---")
-
-                grafico_interactivo(
-                    veces_tarde,
-                    "🚨 Cantidad de Veces Tarde",
-                    etiquetas_personalizadas=
-                    veces_tarde
-                )
-
-                st.dataframe(
-                    veces_tarde.reset_index(),
-                    use_container_width=True
-                )
-
-            else:
-
-                st.error(
-                    "❌ No existen columnas válidas para análisis de tiempos"
-                )
 
     except Exception as e:
 
