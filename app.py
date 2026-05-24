@@ -6,34 +6,41 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 from streamlit_plotly_events import plotly_events
+import re
 
 # ==========================================
-# CONFIGURACIÓN PÁGINA
+# CONFIGURACIÓN
 # ==========================================
-st.set_page_config(
-    page_title="Copa Oeste - Análisis",
-    layout="wide"
-)
-
+st.set_page_config(page_title="Copa Oeste - Análisis", layout="wide")
 st.title("🚌 Análisis de Rutas - Copa Oeste")
 
-# ==========================================
-# CONFIGURACIÓN GENERAL
-# ==========================================
 CAPACIDAD_BUS = 22
+
+
+# ==========================================
+# ORDEN NATURAL DE RUTAS (F1, F2, F3...)
+# ==========================================
+def extraer_numero_ruta(ruta):
+    match = re.search(r"\d+", str(ruta))
+    return int(match.group()) if match else 9999
+
+
+# ==========================================
+# FORMATO ETIQUETAS
+# ==========================================
+def formatear_valor(valor, porcentaje=False):
+    if porcentaje:
+        return f"{round(valor,1)}%"
+    return f"{int(round(valor,0))}"
+
 
 # ==========================================
 # GRÁFICO INTERACTIVO
 # ==========================================
-def grafico_interactivo(
-    datos,
-    titulo,
-    etiquetas_personalizadas=None,
-    color="#7DB7E8"
-):
+def grafico_interactivo(datos, titulo, porcentaje=False, color="#7DB7E8"):
 
     if datos.empty:
-        st.warning(f"⚠️ No hay datos para mostrar en: {titulo}")
+        st.warning(f"⚠️ No hay datos para: {titulo}")
         return None
 
     df_chart = pd.DataFrame({
@@ -41,21 +48,28 @@ def grafico_interactivo(
         "Valor": datos.values
     })
 
-    df_chart["Valor"] = pd.to_numeric(df_chart["Valor"], errors="coerce").fillna(0)
+    df_chart["Orden"] = df_chart["Ruta"].apply(extraer_numero_ruta)
 
-    if etiquetas_personalizadas is not None:
-        etiquetas = pd.to_numeric(etiquetas_personalizadas, errors="coerce").fillna(0)
-        df_chart["Etiqueta"] = etiquetas.round(0).astype(int).astype(str)
-    else:
-        df_chart["Etiqueta"] = df_chart["Valor"].round(0).astype(int).astype(str)
+    df_chart = df_chart.sort_values(["Orden", "Valor"], ascending=[True, False])
 
-    df_chart = df_chart.sort_values(by="Valor", ascending=False)
+    # ==========================================
+    # ETIQUETAS ARRIBA (FORMATO DINÁMICO)
+    # ==========================================
+    df_chart["Etiqueta"] = df_chart["Valor"].apply(
+        lambda x: formatear_valor(x, porcentaje)
+    )
 
-    fig = px.bar(df_chart, x="Ruta", y="Valor", text="Etiqueta", title=titulo)
+    fig = px.bar(
+        df_chart,
+        x="Ruta",
+        y="Valor",
+        text="Etiqueta",
+        title=titulo
+    )
 
     fig.update_traces(
+        textposition="outside",   # ⭐ ARRIBA DE LAS BARRAS
         marker_color=color,
-        textposition="outside",
         textfont_color="white",
         hovertemplate="<b>Ruta:</b> %{x}<br><b>Valor:</b> %{y}<extra></extra>"
     )
@@ -74,13 +88,10 @@ def grafico_interactivo(
 
 
 # ==========================================
-# SUBIR ARCHIVO
+# UPLOAD
 # ==========================================
-archivo = st.file_uploader("📂 Sube el Excel de Rutas", type=["xlsx"])
+archivo = st.file_uploader("📂 Sube Excel", type=["xlsx"])
 
-# ==========================================
-# INICIO
-# ==========================================
 if archivo:
 
     try:
@@ -90,53 +101,44 @@ if archivo:
         # ==========================================
         st.sidebar.header("⚙️ Configuración")
 
-        tipo_movimiento = st.sidebar.radio(
-            "🚌 Tipo de Movimiento",
-            ["ENTRADA", "SALIDA"]
-        )
+        tipo_movimiento = st.sidebar.radio("Movimiento", ["ENTRADA", "SALIDA"])
 
-        tipo_analisis = st.sidebar.radio(
-            "📌 Tipo de Análisis",
-            ["👥 Población", "⏱️ Tiempos"]
-        )
+        tipo_analisis = st.sidebar.radio("Análisis", ["👥 Población", "⏱️ Tiempos"])
 
         # ==========================================
-        # LEER EXCEL
+        # EXCEL
         # ==========================================
-        excel_file = pd.ExcelFile(archivo)
+        excel = pd.ExcelFile(archivo)
 
-        hoja_real = None
-        for hoja in excel_file.sheet_names:
-            if hoja.strip().upper() == tipo_movimiento:
-                hoja_real = hoja
+        hoja = None
+        for h in excel.sheet_names:
+            if h.strip().upper() == tipo_movimiento:
+                hoja = h
                 break
 
-        if hoja_real is None:
-            st.error(f"❌ No existe la hoja {tipo_movimiento}")
+        if hoja is None:
+            st.error("❌ Hoja no encontrada")
             st.stop()
 
-        df_raw = pd.read_excel(archivo, sheet_name=hoja_real, header=None)
+        df_raw = pd.read_excel(archivo, sheet_name=hoja, header=None)
 
         # ==========================================
-        # DETECTAR ENCABEZADO
+        # ENCABEZADO
         # ==========================================
-        fila_encabezado = None
+        fila_enc = None
+
         for i, row in df_raw.iterrows():
-            valores = [str(v).strip().upper() for v in row.values]
-            if any(x in valores for x in ["FECHA", "RUTA", "UNIDAD"]):
-                fila_encabezado = i
+            vals = [str(x).upper() for x in row.values]
+            if any(k in vals for k in ["FECHA", "RUTA", "UNIDAD"]):
+                fila_enc = i
                 break
 
-        if fila_encabezado is None:
-            st.error("❌ No se detectó encabezado")
-            st.stop()
+        cols = df_raw.iloc[fila_enc].values
 
-        columnas = df_raw.iloc[fila_encabezado].values
-
-        cols_limpias = []
+        headers = []
         contador = {}
 
-        for i, c in enumerate(columnas):
+        for i, c in enumerate(cols):
 
             c = str(c).strip().upper()
 
@@ -146,10 +148,10 @@ if archivo:
                 contador[c] = contador.get(c, 0) + 1
                 name = c if contador[c] == 1 else f"{c}_{contador[c]}"
 
-            cols_limpias.append(name)
+            headers.append(name)
 
-        df = df_raw.iloc[fila_encabezado+1:].copy()
-        df.columns = cols_limpias
+        df = df_raw.iloc[fila_enc+1:].copy()
+        df.columns = headers
         df = df.dropna(how="all")
 
         df["RUTA"] = df["RUTA"].astype(str).str.upper().str.strip()
@@ -173,9 +175,9 @@ if archivo:
             }
 
             df["PERIODO"] = (
-                df["FECHA"].dt.year.astype(str) +
-                "-" +
-                df["FECHA"].dt.month.map(meses)
+                df["FECHA"].dt.year.astype(str)
+                + "-"
+                + df["FECHA"].dt.month.map(meses)
             )
 
             mes = st.sidebar.selectbox(
@@ -186,7 +188,7 @@ if archivo:
             if mes != "Todos":
                 df = df[df["PERIODO"] == mes]
 
-        st.success("✅ Datos cargados correctamente")
+        st.success("✅ Datos cargados")
         st.dataframe(df[visibles].head(), use_container_width=True)
 
         # ==========================================
@@ -197,7 +199,7 @@ if archivo:
             st.header("👥 Análisis de Población")
 
             submenu = st.sidebar.radio(
-                "Tipo de Vista",
+                "Vista",
                 ["✈️ Aire", "🌎 Tierra", "📊 General"]
             )
 
@@ -214,14 +216,12 @@ if archivo:
             # ==========================================
             d["Aire"] = d[cols_aire].sum(axis=1)
             d["Tierra"] = d[cols_tierra].sum(axis=1)
-
-            # ⭐ GENERAL (NUEVO)
             d["General"] = d["Aire"] + d["Tierra"]
 
             col_hora = next((c for c in ["H. PARTIDA","HORA SALIDA","HORA LLEGADA"] if c in d.columns), None)
 
             if not col_hora:
-                st.error("❌ No hay columna de hora")
+                st.error("Sin hora")
                 st.stop()
 
             df_d = d.groupby(["FECHA","RUTA",col_hora]).agg(
@@ -232,11 +232,8 @@ if archivo:
             ).reset_index()
 
             df_d["Capacidad"] = df_d["Buses"] * CAPACIDAD_BUS
-
             df_d["Load_Factor"] = df_d["General"] / df_d["Capacidad"] * 100
-
             df_d["Req_Buses"] = np.ceil(df_d["General"] / CAPACIDAD_BUS)
-
             df_d["Saturado"] = df_d["General"] > df_d["Capacidad"]
 
             # ==========================================
@@ -258,16 +255,16 @@ if archivo:
             ruta["Load_Factor"] = ruta["Total_General"] / (ruta["Eventos"] * CAPACIDAD_BUS) * 100
 
             # ==========================================
-            # GRÁFICAS
+            # GRÁFICOS
             # ==========================================
             if submenu == "✈️ Aire":
-                grafico_interactivo(ruta["Prom_Aire"], "Aire", color="#63B3ED")
+                grafico_interactivo(ruta["Prom_Aire"], "Aire", porcentaje=False, color="#63B3ED")
 
             elif submenu == "🌎 Tierra":
-                grafico_interactivo(ruta["Prom_Tierra"], "Tierra", color="#68D391")
+                grafico_interactivo(ruta["Prom_Tierra"], "Tierra", porcentaje=False, color="#68D391")
 
             else:
-                grafico_interactivo(ruta["Prom_General"], "General", color="#F6AD55")
+                grafico_interactivo(ruta["Prom_General"], "General", porcentaje=False, color="#F6AD55")
 
             # ==========================================
             # KPIs
@@ -304,7 +301,7 @@ if archivo:
 
                 tarde = dt.groupby("RUTA")["Delay"].apply(lambda x: (x > 0).sum())
 
-                grafico_interactivo(tarde, "Veces Tarde", color="#FC8181")
+                grafico_interactivo(tarde, "Veces Tarde", porcentaje=False, color="#FC8181")
 
                 st.dataframe(tarde.reset_index(), use_container_width=True)
 
