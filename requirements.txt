@@ -3,3 +3,4 @@ pandas
 openpyxl
 matplotlib
 Plotly
+streamlit-plotly-events
