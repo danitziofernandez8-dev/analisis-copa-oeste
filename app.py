@@ -119,7 +119,7 @@ def grafico_interactivo(
         hovertemplate=
         "<b>Ruta:</b> %{x}<br>" +
         "<b>Valor:</b> %{y}<br>" +
-        "<b>Promedio Total:</b> %{text}<extra></extra>"
+        "<b>Promedio General:</b> %{text}<extra></extra>"
     )
 
     fig.update_layout(
@@ -150,7 +150,7 @@ def grafico_interactivo(
     )
 
     # ==========================================
-    # MOSTRAR
+    # EVENTOS
     # ==========================================
     selected_points = plotly_events(
         fig,
@@ -161,9 +161,6 @@ def grafico_interactivo(
         key=titulo
     )
 
-    # ==========================================
-    # CLICK DINÁMICO
-    # ==========================================
     ruta_seleccionada = None
 
     if selected_points:
@@ -242,7 +239,7 @@ if archivo:
         )
 
         # ==========================================
-        # DETECTAR ENCABEZADO
+        # BUSCAR ENCABEZADO
         # ==========================================
         fila_encabezado = None
 
@@ -329,7 +326,7 @@ if archivo:
         )
 
         # ==========================================
-        # LIMPIAR RUTA
+        # LIMPIAR RUTAS
         # ==========================================
         if "RUTA" in df.columns:
 
@@ -481,7 +478,7 @@ if archivo:
             )
 
             # ==========================================
-            # HORA
+            # DETECTAR HORA
             # ==========================================
             posibles_horas = [
                 "H. PARTIDA",
@@ -507,7 +504,7 @@ if archivo:
                 st.stop()
 
             # ==========================================
-            # CONSOLIDADO REAL
+            # CONSOLIDAR
             # ==========================================
             df_despachos = df_pasajeros.groupby(
                 ["FECHA", "RUTA", col_hora]
@@ -519,12 +516,20 @@ if archivo:
             ).reset_index()
 
             # ==========================================
+            # CAPACIDAD OPERATIVA REAL
+            # ==========================================
+            df_despachos["Capacidad_Operativa"] = (
+                df_despachos["Buses_Despachados"]
+                * CAPACIDAD_BUS
+            )
+
+            # ==========================================
             # LOAD FACTOR REAL
             # ==========================================
             df_despachos["Load_Factor_Real"] = (
                 (
                     df_despachos["Total_Pasajeros"]
-                    / CAPACIDAD_BUS
+                    / df_despachos["Capacidad_Operativa"]
                 ) * 100
             )
 
@@ -539,11 +544,11 @@ if archivo:
             ).apply(np.ceil)
 
             # ==========================================
-            # SOBREPOBLACIÓN
+            # SOBREPOBLACIÓN REAL
             # ==========================================
             df_despachos["Frecuencia_Saturada"] = (
                 df_despachos["Total_Pasajeros"]
-                > CAPACIDAD_BUS
+                > df_despachos["Capacidad_Operativa"]
             )
 
             # ==========================================
@@ -561,7 +566,7 @@ if archivo:
             ).round(1)
 
             # ==========================================
-            # ELIMINAR VACÍOS
+            # LIMPIAR
             # ==========================================
             promedio_ruta = promedio_ruta[
                 promedio_ruta.index.notna()
@@ -587,10 +592,13 @@ if archivo:
                 ]
 
             # ==========================================
-            # GRAFICA AIRE
+            # RUTA SELECCIONADA
             # ==========================================
             ruta_seleccionada = None
 
+            # ==========================================
+            # GRAFICA AIRE
+            # ==========================================
             if submenu_poblacion == "✈️ Aire":
 
                 st.subheader(
@@ -640,7 +648,7 @@ if archivo:
                 ]
 
             # ==========================================
-            # KPI
+            # KPIs
             # ==========================================
             st.markdown("---")
 
@@ -700,7 +708,7 @@ if archivo:
             )
 
             # ==========================================
-            # RESUMEN
+            # TABLA RESUMEN
             # ==========================================
             st.markdown("---")
 
@@ -750,7 +758,8 @@ if archivo:
                 "Total_Pasajeros",
                 "Load_Factor_Real",
                 "Buses_Despachados",
-                "Buses_Requeridos"
+                "Buses_Requeridos",
+                "Capacidad_Operativa"
 
             ]].copy()
 
@@ -764,7 +773,8 @@ if archivo:
                 "Pasajeros Totales",
                 "Load Factor Real",
                 "Buses Utilizados",
-                "Buses Requeridos"
+                "Buses Requeridos",
+                "Capacidad Operativa"
 
             ]
 
